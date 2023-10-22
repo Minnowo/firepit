@@ -4,11 +4,14 @@ package org.ezcampus.firepit.websocket;
 import java.io.IOException;
 
 import org.ezcampus.firepit.data.Client;
+import org.ezcampus.firepit.data.JsonService;
 import org.ezcampus.firepit.data.Room;
 import org.ezcampus.firepit.data.RoomSessionController;
+import org.ezcampus.firepit.data.message.BadMessage;
+import org.ezcampus.firepit.data.message.OkMessage;
+import org.ezcampus.firepit.data.message.RenameMessage;
+import org.ezcampus.firepit.data.message.SocketMessage;
 import org.tinylog.Logger;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.inject.Inject;
 import jakarta.websocket.CloseReason;
@@ -26,40 +29,71 @@ public class WSRoom {
 	@Inject
 	RoomSessionController roomSessionController;
 	
-	private final ObjectMapper JSON_MAPPER = new ObjectMapper();
+	@Inject 
+	JsonService jsonService;
+	
+	Client client;
+	
+	Room clientRoom;
 	
 	@OnOpen
     public void onOpen(@PathParam("rid") String roomid, Session session) throws IOException {
 		
-		Room r = roomSessionController.getRoom(roomid);
+		clientRoom = roomSessionController.getRoom(roomid);
 		
-		if(r == null) {
+		if(clientRoom == null) {
+			
+			Logger.info("Someone tried to connect to a room which does not exist!");
 			
 			session.close(new CloseReason(CloseCodes.UNEXPECTED_CONDITION, "Room does not exist"));
 			
 			return;
 		}
-			
-		Client c = new Client(session.getId());
+
+		client = new Client(session);
 		
-		r.addClient(c);
+		clientRoom.addClient(client);
 		
 		Logger.info("New client connection {}",  session.getId());
+		
+		session.getBasicRemote().sendText(jsonService.toJson(new OkMessage("Room has been joined")));
     }
 
     @OnMessage
-    public String onMessage(String name, Session session) {
+    public String onMessage(String json, Session session) throws IOException {
+    	if(clientRoom == null) {
+			
+			session.close(new CloseReason(CloseCodes.UNEXPECTED_CONDITION, "Room does not exist"));
+			
+			return null;
+		}
+  
     	
-    	Logger.info("Client {} said {}", session.getId(), name);
+    	SocketMessage m = jsonService.fromJson(json, SocketMessage.class);
     	
-        return ("Hello" + name);
+    	if(m == null) {
+    		return jsonService.toJson(new BadMessage("Invalid message request"));
+    	}
+    	
+    	this.clientRoom.broadCast(jsonService.toJson(new RenameMessage("this is a new name")), session);
+    	
+    	Logger.info("Client {} said {}", session.getId(), m.getMessageType());
+
+        return jsonService.toJson(new OkMessage());
     }
 
     
 
     @OnClose
-    public void helloOnClose(CloseReason reason, Session session) {
+    public void onClose(CloseReason reason, Session session) {
     	
-    	Logger.info("Client {} has closed connection with reason {}", reason.getReasonPhrase());
+    	Logger.info("Client {} has closed connection with reason {}", session.getId(), reason.getReasonPhrase());
+    	
+    	if(clientRoom == null) {
+			
+			return;
+		}
+    	
+    	clientRoom.removeClient(session.getId());
     }
 }

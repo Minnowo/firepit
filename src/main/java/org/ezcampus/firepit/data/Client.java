@@ -1,14 +1,19 @@
 package org.ezcampus.firepit.data;
 
+import jakarta.websocket.Session;
+
 public class Client
 {
 	public String displayName;
 	
 	public String clientId;
 	
-	public Client(String clientId) {
+	public Session clientSession;
+	
+	public Client(Session clientSession) {
 		
-		this.clientId = clientId;
+		this.clientSession = clientSession;
+		this.clientId = clientSession.getId();
 		this.displayName = "Anonymous";
 	}
 	

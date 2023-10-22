@@ -4,7 +4,11 @@
     <script src="main.js"></script>
     
     <form>
-        <input type="button" onclick="sendMessage()" value="send" style="height: 100%;">
+        <input type="button" onclick="newRoom()" value="New Room" style="height: 100%;">
+        <input type="button" onclick="joinRoom()" value="Join Room" style="height: 100%;">
+        <input type="text" placeholder="Open Send BAD" style="height: 100%;" id="roomId">
+        <input type="button" onclick="sendOKMessage()" value="Send OK" style="height: 100%;">
+        <input type="button" onclick="sendBadMessage()" value="Send BAD" style="height: 100%;">
     </form>
 
 </body>

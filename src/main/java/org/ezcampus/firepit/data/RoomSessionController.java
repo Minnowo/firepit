@@ -4,6 +4,8 @@ import java.util.ArrayList;
 
 import javax.print.attribute.standard.Chromaticity;
 
+import org.tinylog.Logger;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -32,6 +34,8 @@ public class RoomSessionController
 	public Room createRoom() {
 		
 		Room r = new Room(Integer.toString(this.roomId));
+		
+		Logger.info("Creating new room wtih id {}", this.roomId);
 			
 		this.roomId++;
 		
