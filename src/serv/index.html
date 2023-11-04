@@ -1,15 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>People Grid</title>
+    <style>
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .person {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
 <body>
     <script src="main.js"></script>
     
-    <form>
-        <input type="button" onclick="newRoom()" value="New Room" style="height: 100%;">
-        <input type="button" onclick="joinRoom()" value="Join Room" style="height: 100%;">
-        <input type="text" placeholder="Open Send BAD" style="height: 100%;" id="roomId">
-        <input type="button" onclick="sendOKMessage()" value="Send OK" style="height: 100%;">
-        <input type="button" onclick="sendBadMessage()" value="Send BAD" style="height: 100%;">
-    </form>
+ <table>
+        <tr>
+            <td>
+                <input type="button" onclick="newRoom()" value="New Room" style="height: 100%;">
+            </td>
+            <td >
+                <input type="text" placeholder="Enter your name" id="clientName">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <input type="button" onclick="joinRoom()" value="Join Room" style="height: 100%;">
+            </td>
+            <td >
+                <input type="text" placeholder="Room ID to Join" id="roomId">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <input type="button" onclick="sendOKMessage()" value="Send OK" style="height: 100%;">
+            </td>
+            <td>
+                <input type="button" onclick="sendBadMessage()" value="Send BAD" style="height: 100%;">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <input type="button" onclick="sendSetSpeakerMessage()" value="Set Speaker" style="height: 100%;">
+            </td>
+            <td>
+                <input type="text" placeholder="New Speaker Id" id="newSpeakerId">
+            </td>
+        </tr>
+    </table>
+    
+    
+    <h1>People Grid</h1>
+    <div class="grid" id="peopleGrid"></div>
+
+    <h1>Speaker is:</h1>
+    <h3 id="currentSpeaker"></h3>
 
 </body>
 </html>

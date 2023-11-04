@@ -4,16 +4,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class SetSpeakerMessage extends SocketMessage
 {
-
-	@JsonProperty("speaker_name")
-	public String newSpeakerName;
+	@JsonProperty("speaker_id")
+	public String newSpeakerId;
 
 	@Override
 	public int getMessageType()
 	{
 		return CLIENT_SET_SPEAKER;
 	}
-
-	
-
 }

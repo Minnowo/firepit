@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class BadMessage extends SocketMessage
 {
-	public int messageType = 400;
-	
 	@JsonProperty("reason")
 	public String reason;
 
