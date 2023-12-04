@@ -31,11 +31,13 @@ public class RoomSessionController
 		// ...
 	}
 
-	public Room createRoom() {
+	public Room createRoom(String roomName, int roomCapacity) {
 		
-		Room r = new Room(Integer.toString(this.roomId));
+		Room r = new Room(Integer.toString(this.roomId), roomName, roomCapacity);
 		
 		Logger.info("Creating new room wtih id {}", this.roomId);
+		Logger.info(">> ROON NAME: {} ", roomName);
+		Logger.info(">> ROON CAP: {} ", String.valueOf(roomCapacity));
 			
 		this.roomId++;
 		

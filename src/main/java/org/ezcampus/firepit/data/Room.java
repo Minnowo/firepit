@@ -25,17 +25,22 @@ public class Room
 	@JsonProperty("room_name")
 	public String roomName;
 
+	@JsonProperty("room_capacity")
+	public Integer roomCapacity;
+
 	@JsonProperty("room_code")
 	public String roomId;
 
-	public Room(String roomId)
+	public Room(String roomId, String roomName, int roomCapacity)
 	{
 
 		this.roomMembers = new CopyOnWriteArrayList<Client>();
 
 		this.roomId = roomId;
 
-		this.roomName = roomId;
+		// User Inputted Attributes for Room	
+		this.roomName = roomName;
+		this.roomCapacity = (Integer)roomCapacity;
 	}
 
 	public boolean hasClient(String sessionId)

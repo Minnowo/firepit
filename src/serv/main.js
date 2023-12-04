@@ -1,7 +1,7 @@
 
 
 let ws;
-const HOST = "localhost:8085/firepit";
+const HOST = "localhost:8080/firepit";
 
 
 function setSpeaker(speakerId) {
@@ -61,13 +61,25 @@ function joinRoom(){
    socket_connect(a.value);
 }
 
-function newRoom(){
-    
-    fetch(`http://${HOST}/room/new`)
-        .then(x => x.text())
-        .then(roomId => {
-            socket_connect(roomId);
-    });
+function newRoom() {
+    // Define your payload here
+    let payload = {
+        room_name: "YourRoomName", // Replace with the desired room name
+        room_capacity: 10 // Replace with the desired room capacity
+    };
+
+    fetch(`http://${HOST}/room/new`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.text())
+    .then(roomId => {
+        socket_connect(roomId);
+    })
+    .catch(error => console.error('Error:', error));
 }
 
 function socket_connect(roomId){
