@@ -8,6 +8,9 @@ public class CreateRoomQuery {
     
     @JsonProperty("room_capacity")
     private int roomCapacity;
+
+    @JsonProperty("require_occupation")
+    private boolean requireOccupation;
     
     //*** Getters and Setters
 
@@ -17,5 +20,9 @@ public class CreateRoomQuery {
 
     public int getRoomCapacity() {
         return this.roomCapacity;
+    }
+
+    public boolean getRequireOccupation() {
+        return this.requireOccupation;
     }
 }

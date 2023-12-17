@@ -31,9 +31,9 @@ public class RoomSessionController
 		// ...
 	}
 
-	public Room createRoom(String roomName, int roomCapacity) {
+	public Room createRoom(String roomName, int roomCapacity, boolean requireOccupation) {
 		
-		Room r = new Room(Integer.toString(this.roomId), roomName, roomCapacity);
+		Room r = new Room(Integer.toString(this.roomId), roomName, roomCapacity, requireOccupation);
 		
 		Logger.info("Creating new room wtih id {}", this.roomId);
 		Logger.info(">> ROON NAME: {} ", roomName);

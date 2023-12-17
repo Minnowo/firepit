@@ -42,10 +42,15 @@ public class WSRoom {
 	Room clientRoom;
 	
 	@OnOpen
-    public void onOpen(@PathParam("rid") String roomid, @PathParam("name") String name, Session session) throws IOException {
+    public void onOpen(@PathParam("rid") String roomid, 
+					   @PathParam("disp_name") String displayName, 
+					   @PathParam("disp_occup") String displayOccupation,
+					   @PathParam("disp_avatar") int avatarIndex,
+					   Session session) throws IOException {
 		
 		clientRoom = roomSessionController.getRoom(roomid);
 		
+		//! --- ASSERT: Existence of Room ---
 		if(clientRoom == null) {
 			
 			Logger.info("Someone tried to connect to a room which does not exist!");
@@ -55,11 +60,13 @@ public class WSRoom {
 			return;
 		}
 
-		client = new Client(session);
+		//! --- ASSERT: If Room has enough space for incoming client ---
+		int spaceDiff = clientRoom.roomCapacity - clientRoom.roomMembers.size();
+		if(spaceDiff == 0){ return; }
 		
-		if(name != null && !name.isBlank()) {
-			client.displayName = name;	
-		}
+		//* All Assertions Passed! Instanciate client & do assertions on their inputted data now */
+
+		client = new Client(session, displayName, displayOccupation);
 		
 		clientRoom.addClient(client);
 		

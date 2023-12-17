@@ -31,7 +31,11 @@ public class Room
 	@JsonProperty("room_code")
 	public String roomId;
 
-	public Room(String roomId, String roomName, int roomCapacity)
+	//* Do client's in this room need to specify their department/occupation */
+	@JsonProperty("require_occupation")
+	public Boolean requireOccupation;
+
+	public Room(String roomId, String roomName, int roomCapacity, boolean requireOccupation)
 	{
 
 		this.roomMembers = new CopyOnWriteArrayList<Client>();
@@ -41,6 +45,7 @@ public class Room
 		// User Inputted Attributes for Room	
 		this.roomName = roomName;
 		this.roomCapacity = (Integer)roomCapacity;
+		this.requireOccupation = (Boolean)requireOccupation;
 	}
 
 	public boolean hasClient(String sessionId)

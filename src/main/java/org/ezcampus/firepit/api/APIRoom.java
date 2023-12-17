@@ -41,9 +41,12 @@ public class APIRoom {
 			return Response.status(Response.Status.BAD_REQUEST).entity("Invalid JSON payload").build();
 		}
 
+		//* --- Assertions for JSON where successful ---
+
 		Room r = roomSessionController.createRoom(
 			requestData.getRoomName(), 
-			requestData.getRoomCapacity()
+			requestData.getRoomCapacity(),
+			requestData.getRequireOccupation()
 		);
 
 		return Response.status(Response.Status.OK).entity(r.roomId).build();

@@ -12,6 +12,9 @@ public class Client
 	
 	@JsonProperty("client_id")
 	public String clientDisplayId;
+
+	@JsonProperty("client_occupation")
+	public String clientOccupation;
 	
 	@JsonIgnore
 	public String clientId;
@@ -19,11 +22,24 @@ public class Client
 	@JsonIgnore
 	public Session clientSession;
 	
-	public Client(Session clientSession) {
-		
+	public Client(Session clientSession, String dirtyDisplayName, String dirtyOccupation) {
+
+		//Display Name
+		if(dirtyDisplayName != null && !dirtyDisplayName.isBlank()) {
+			this.displayName = dirtyDisplayName;	
+		} else {
+			this.displayName = "Anonymous";
+		}
+
+		//Client Occupation
+		this.clientOccupation = null;
+		if(dirtyOccupation != null && !dirtyOccupation.isBlank()) {
+			this.clientOccupation = dirtyOccupation;	
+		} 
+
+		//Generics
 		this.clientSession = clientSession;
 		this.clientId = clientSession.getId();
-		this.displayName = "Anonymous";
 		this.clientDisplayId = java.util.UUID.randomUUID().toString();
 	}
 }
