@@ -15,6 +15,7 @@ import org.ezcampus.firepit.data.message.RenameMessage;
 import org.ezcampus.firepit.data.message.RoomInfoMessage;
 import org.ezcampus.firepit.data.message.SetSpeakerMessage;
 import org.ezcampus.firepit.data.message.SocketMessage;
+import org.ezcampus.firepit.data.message.WhoAmIMessage;
 import org.tinylog.Logger;
 
 import jakarta.inject.Inject;
@@ -77,12 +78,11 @@ public class WSRoom {
 		// * All Assertions Passed! Instanciate client & do assertions on their inputted data now
 
 		client = new Client(session, displayName, displayOccupation);
-
 		clientRoom.addClient(client);
 
 		Logger.info("New client connection {}", session.getId());
 
-		session.getBasicRemote().sendText(jsonService.toJson(new OkMessage("Room has been joined")));
+		session.getBasicRemote().sendText(jsonService.toJson(new WhoAmIMessage(client)));
 
 		session.getBasicRemote().sendText(jsonService.toJson(new RoomInfoMessage(clientRoom)));
 

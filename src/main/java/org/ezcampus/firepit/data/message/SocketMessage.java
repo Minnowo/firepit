@@ -17,6 +17,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo.Id;
     @Type(value = RoomInfoMessage.class, name = "60"),
     @Type(value = BadMessage.class, name = "400"),
     @Type(value = OkMessage.class, name = "200"),
+    @Type(value = WhoAmIMessage.class, name = "100"),
 })
 public abstract class SocketMessage implements MessageType
 {
