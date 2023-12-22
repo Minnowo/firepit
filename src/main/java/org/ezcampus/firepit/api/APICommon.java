@@ -29,7 +29,7 @@ public class APICommon
 		{
 			if(HEARTBEAT_STRING == null) {
 				HashMap<String, String> hm = new HashMap<String, String>();
-				hm.put("detail", "EZCampus SearchIndex Backend");
+				hm.put("detail", "EZCampus Firepit Backend");
 				hm.put("license", LICENSE_URL);
 				hm.put("source", SOURCE_URL);
 				
