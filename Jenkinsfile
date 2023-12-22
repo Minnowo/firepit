@@ -11,11 +11,9 @@ pipeline {
         stage('Build War File') { 
             steps { 
                 
-                dir("firepit") {
-                    sh "mvn --version"
-                    sh "mvn clean package"
-                }
-
+                sh "mvn --version"
+                sh "mvn clean package"
+                
                 echo 'War file built' 
             }
         }
