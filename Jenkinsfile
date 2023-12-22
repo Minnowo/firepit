@@ -20,7 +20,7 @@ pipeline {
         
         stage('Remote Copy War File') {
             steps {
-                dir("firepit/target"){
+                dir("target"){
                     sshPublisher(publishers: [
                         sshPublisherDesc(
                             configName: "${SSH_SERVER}", 
