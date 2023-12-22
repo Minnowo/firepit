@@ -5,6 +5,7 @@
 	<groupId>org.ezcampus</groupId>
 	<artifactId>firepit</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<name>firepit</name>
 	<packaging>war</packaging>
 
 	<properties>
