@@ -58,7 +58,7 @@ public class RoomSessionController
 	
 	public Room getRoom(String roomId) {
 		
-		System.out.println("GOT ROOM_ID: "+roomId);
+		Logger.info("GOT ROOM_ID: "+roomId);
 
 		if(roomId == null || roomId.isBlank())
 			
@@ -66,7 +66,7 @@ public class RoomSessionController
 		
 		for(Room r : this.rooms){
 			
-			System.out.println(">>> ROOM" + r.roomName + " "+ r.roomId);
+			Logger.info(">>> ROOM" + r.roomName + " "+ r.roomId);
 
 			if(r.roomId.trim().equals(roomId.trim())) { // Avoiding white-space issues for java's strict comparison
 				return r;

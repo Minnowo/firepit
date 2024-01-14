@@ -5,27 +5,12 @@ import org.tinylog.Logger;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ApplicationScoped;
 
-@ApplicationScoped
 public class JsonService
 {
-	private final ObjectMapper mapper  = new ObjectMapper();
+	private static final ObjectMapper mapper  = new ObjectMapper();
 
-	@PostConstruct
-	void init()
-	{
-
-	}
-
-	@PreDestroy
-	void destroy()
-	{
-	}
-
-	public String toJson(Object o)
+	public static String toJson(Object o)
 	{
 		try
 		{
@@ -38,7 +23,7 @@ public class JsonService
 		}
 	}
 
-	public <T> T fromJson(String json, Class<T> valueType)
+	public static <T> T fromJson(String json, Class<T> valueType)
 	{
 		try
 		{

@@ -34,9 +34,6 @@ public class WSRoom {
 	@Inject
 	RoomSessionController roomSessionController;
 
-	@Inject
-	JsonService jsonService;
-
 	Client client;
 
 	Room clientRoom;
@@ -48,7 +45,7 @@ public class WSRoom {
 			@PathParam("disp_avatar") int avatarIndex,
 			Session session) throws IOException {
 
-				System.out.println("Incoming Connection Details:\n" +
+				Logger.info("Incoming Connection Details:\n" +
                    "------------------------------\n" +
                    "Room ID: " + roomid + "\n" +
                    "Display Name: " + displayName + "\n" +
@@ -82,12 +79,12 @@ public class WSRoom {
 
 		Logger.info("New client connection {}", session.getId());
 
-		session.getBasicRemote().sendText(jsonService.toJson(new WhoAmIMessage(client)));
+		session.getBasicRemote().sendText(JsonService.toJson(new WhoAmIMessage(client)));
 
-		session.getBasicRemote().sendText(jsonService.toJson(new RoomInfoMessage(clientRoom)));
+		session.getBasicRemote().sendText(JsonService.toJson(new RoomInfoMessage(clientRoom)));
 
 		ClientJoinRoomMessage m = new ClientJoinRoomMessage(client);
-		clientRoom.broadCast(jsonService.toJson(m), session);
+		clientRoom.broadCast(JsonService.toJson(m), session);
 	}
 
 	@OnClose
@@ -102,9 +99,9 @@ public class WSRoom {
 
 		ClientLeaveRoomMessage m = new ClientLeaveRoomMessage(client);
 
-		clientRoom.broadCast(jsonService.toJson(m), session);
+		clientRoom.broadCast(JsonService.toJson(m), session);
 
-		clientRoom.removeClient(session.getId());
+		clientRoom.removeClient(session);
 	}
 
 	@OnMessage
@@ -116,10 +113,10 @@ public class WSRoom {
 			return null;
 		}
 
-		SocketMessage m = jsonService.fromJson(json, SocketMessage.class);
+		SocketMessage m = JsonService.fromJson(json, SocketMessage.class);
 
 		if (m == null) {
-			return jsonService.toJson(new BadMessage("Invalid message request"));
+			return JsonService.toJson(new BadMessage("Invalid message request"));
 		}
 
 		switch (m.getMessageType()) {
@@ -127,24 +124,24 @@ public class WSRoom {
 			case MessageType.SERVER_OK_MESSAGE:
 			case MessageType.CLIENT_JOIN_ROOM:
 			case MessageType.CLIENT_LEAVE_ROOM:
-				return jsonService.toJson(new BadMessage("Message does not make sense!"));
+				return JsonService.toJson(new BadMessage("Message does not make sense!"));
 
 			case MessageType.CLIENT_SET_SPEAKER:
 
 				SetSpeakerMessage ssm = (SetSpeakerMessage) m;
 
 				if (!clientRoom.speaker.clientId.equals(session.getId())) {
-					return jsonService.toJson(new BadMessage("You cannot set the speaker unless you are the speaker!"));
+					return JsonService.toJson(new BadMessage("You cannot set the speaker unless you are the speaker!"));
 				}
 
 				if (clientRoom.setSpeakerFromPublicId(ssm.newSpeakerId)) {
-
+					
 					clientRoom.broadCast(json, null);
 
-					return jsonService.toJson(new OkMessage("The speaker has been changed"));
+					return JsonService.toJson(new OkMessage("The speaker has been changed"));
 				}
 
-				return jsonService.toJson(new BadMessage("The speaker id did not exist in the room"));
+				return JsonService.toJson(new BadMessage("The speaker id did not exist in the room"));
 
 			case MessageType.SET_CLIENT_NAME:
 			case MessageType.SET_CLIENT_POSITION:
@@ -153,7 +150,7 @@ public class WSRoom {
 
 		Logger.info("Client {} said {}", session.getId(), m.getMessageType());
 
-		return jsonService.toJson(new OkMessage());
+		return JsonService.toJson(new OkMessage());
 	}
 
 }

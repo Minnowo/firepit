@@ -1,5 +1,7 @@
 package org.ezcampus.firepit.data.message;
 
+import org.ezcampus.firepit.data.JsonService;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -23,4 +25,8 @@ public abstract class SocketMessage implements MessageType
 {
 	@JsonProperty("messageType")
 	public abstract int getMessageType(); 
+	
+	public String toJson() {
+		return JsonService.toJson(this);
+	}
 }
