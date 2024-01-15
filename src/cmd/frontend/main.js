@@ -1,7 +1,7 @@
 
 
 let ws;
-const HOST = "localhost:8080/firepit";
+const HOST = "localhost:3000";
 
 
 function setSpeaker(speakerId) {
@@ -69,11 +69,7 @@ function newRoom() {
     };
 
     fetch(`http://${HOST}/room/new`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        method: 'GET',
     })
     .then(response => response.text())
     .then(roomId => {
@@ -96,7 +92,15 @@ function socket_connect(roomId){
     
     console.log("Got room id from server " + roomId);
 
-    ws = new WebSocket(`ws://${HOST}/websocket/?rid=${roomId}&name=${d.value}`);
+    var url = "ws://localhost:3000/ws";
+    url += "?client_name=";
+    url += d.value;
+    url += "&client_id=nyah";
+    // url += "&client_occupation=test";
+    url += "&rid=";
+    url += roomId;
+
+    ws = new WebSocket(url);
 
     ws.onopen = function (event) {
         console.log("websocket open");
@@ -120,29 +124,29 @@ function socket_connect(roomId){
         // room info message
         if(json.messageType === 60) {
             
-            populatePeopleGrid(json.room.room_members);
+            populatePeopleGrid(json.payload.room.room_members);
             
-            setSpeaker(json.room.room_speaker);
+            setSpeaker(json.payload.room.room_speaker);
         }
 
         
         // client joins room
         if(json.messageType === 50) {
             
-            addPersonToGrid(json.client);
+            addPersonToGrid(json.payload.client);
         }
 
         // client leaves room
         if(json.messageType === 40) {
             
-            removePerson(json.client.client_id);
+            removePerson(json.payload.client.client_id);
         }
         
         // set speaker 
         if(json.messageType === 30) {
             
-            console.log("Setting speaker to " + json.speaker_id);
-            setSpeaker(json.speaker_id);
+            console.log("Setting speaker to " + json.payload.speaker_id);
+            setSpeaker(json.payload.speaker_id);
         }
     }
 }
@@ -195,15 +199,15 @@ function sendBadMessage(){
 
 (function(){
     
-    fetch(`http://${HOST}`, {
-        method: 'GET',
-    })
-        .then(x => x.json())
-        .then(json => {
+    // fetch(`http://${HOST}`, {
+    //     method: 'GET',
+    // })
+    //     .then(x => x.json())
+    //     .then(json => {
         
-            console.log(json);
+    //         console.log(json);
 
-    });
+    // });
     
 
     
