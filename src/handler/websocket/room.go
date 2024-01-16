@@ -10,105 +10,29 @@ import (
 	"github.com/labstack/gommon/log"
 )
 
+//
+// RoomManager Code and Logic
+//
+
 type RoomList map[uint64]*Room
 
+// The main RoomManager type
 type RoomManager struct {
 	rooms RoomList
 
+	// To ensure threadsafe handling of rooms
 	sync.RWMutex
 }
 
+// Creates a new room manager
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
 		rooms: make(map[uint64]*Room),
 	}
 }
 
-func (r *RoomManager) HasRoom(rid uint64) bool {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if _, ok := r.rooms[rid]; ok {
-		return true
-	}
-	return false
-}
-
-func (r *RoomManager) AddRoom(rid uint64) {
-
-	r.Lock()
-	defer r.Unlock()
-
-	r.rooms[rid] = NewRoom(strconv.FormatUint(rid, 10), nil)
-}
-
-func (r *RoomManager) AddClientToRoom(rid uint64, c *Client) {
-
-	var err error
-	var event *Event
-
-	r.RLock()
-	defer r.RUnlock()
-
-	event, err = NewJoinRoomEvent(c)
-
-	if err == nil {
-		r.lockedBroadcast(rid, event)
-	}
-
-	if room, ok := r.rooms[rid]; ok {
-		room.AddClient(c)
-	}
-}
-
-func (r *RoomManager) RemoveRoomClient(rid uint64, c *Client) {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	event, err := NewLeaveRoomEvent(c)
-
-	if err == nil {
-		r.lockedBroadcast(rid, event)
-	}
-
-	if room, ok := r.rooms[rid]; ok {
-		room.RemoveClient(c)
-	}
-}
-
-func (r *RoomManager) Broadcast(rid uint64, e *Event) {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	r.lockedBroadcast(rid, e)
-}
-
-func (r *RoomManager) lockedBroadcast(rid uint64, e *Event) {
-
-	if room, ok := r.rooms[rid]; ok {
-		room.Broadcast(e)
-	}
-}
-
-func (r *RoomManager) BroadcastRoomInfo(rid uint64, c *Client) {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if room, ok := r.rooms[rid]; ok {
-
-		rinfo, err := room.GetRoomInfoEvent()
-
-		if err == nil {
-			c.send <- *rinfo
-		}
-	}
-}
-
-func (r *RoomManager) CreateRoom() (uint64, error) {
+// Get a unique room id
+func (r *RoomManager) CreateRoomID() (uint64, error) {
 
 	for {
 		rid, err := util.GenerateFull64BitNumber()
@@ -131,58 +55,198 @@ func (r *RoomManager) CreateRoom() (uint64, error) {
 	}
 }
 
+// Creates a new room with the given id
+func (r *RoomManager) AddRoom(rid uint64) {
+
+	room := NewRoom(strconv.FormatUint(rid, 10), nil)
+
+	// important we start the room loop here
+	go room.RunRoom()
+
+	r.Lock()
+	defer r.Unlock()
+
+	r.rooms[rid] = room
+}
+
+// Checks if there is an existing room with this id
+func (r *RoomManager) HasRoom(rid uint64) bool {
+
+	r.RLock()
+	defer r.RUnlock()
+
+	if _, ok := r.rooms[rid]; ok {
+		return true
+	}
+	return false
+}
+
+// Adds the given client to the room
+func (r *RoomManager) AddClientToRoom(rid uint64, c *Client) {
+
+	r.RLock()
+	defer r.RUnlock()
+
+	if room, ok := r.rooms[rid]; ok {
+
+		room.registerClient <- c
+	}
+}
+
+// Removes the given client from the room
+func (r *RoomManager) RemoveRoomClient(rid uint64, c *Client) {
+
+	r.RLock()
+	defer r.RUnlock()
+
+	if room, ok := r.rooms[rid]; ok {
+
+		room.unregisterClient <- c
+	}
+}
+
+//
+// Room Code and logic
+//
+
+// The room type used for json
 type RoomJSON struct {
 	ID                uint64         `json:"room_code"`
 	Name              string         `json:"room_name"`
 	Clients           ClientInfoList `json:"room_members"`
 	Speaker           *ClientInfo    `json:"room_speaker"`
-	Capacity          uint           `json:"room_capacity"`
+	Capacity          int            `json:"room_capacity"`
 	RequireOccupation bool           `json:"room_occupation"`
 }
+
+// The main room type, used for logic
 type Room struct {
 	ID                uint64
 	Name              string
 	Clients           ClientSet
 	Speaker           *Client
-	Capacity          uint
+	Capacity          int
 	RequireOccupation bool
 
-	// Using a syncMutex here to be able to lock state before editing clients
-	// Could also use Channels to block
-	sync.RWMutex
+	done             chan struct{}
+	setSpeaker       chan *Client
+	registerClient   chan *Client
+	unregisterClient chan *Client
+	broadcastInfo    chan *Client
+	broadcast        chan *Event
 }
 
+// Create a new room
 func NewRoom(name string, speaker *Client) *Room {
 	return &Room{
-		Name:    name,
-		Speaker: speaker,
-		Clients: make(ClientSet),
+		Name:             name,
+		Speaker:          speaker,
+		Capacity:         30,
+		done:             make(chan struct{}),
+		Clients:          make(ClientSet),
+		setSpeaker:       make(chan *Client),
+		registerClient:   make(chan *Client),
+		unregisterClient: make(chan *Client),
+		broadcast:        make(chan *Event),
+		broadcastInfo:    make(chan *Client),
 	}
 }
 
-func (r *Room) GetRoomInfoEvent() (*Event, error) {
+// Handle channel communication for the room
+func (r *Room) RunRoom() {
 
-	r.RLock()
-	defer r.RUnlock()
-
-	return NewRoomInfoEvent(r)
-}
-func (r *Room) Broadcast(e *Event) {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	for client := range r.Clients {
-
-		client.send <- *e
+	for {
+		select {
+		case c := <-r.registerClient:
+			log.Debugf("Adding client %s", c.info.Name)
+			r._addClient(c)
+		case c := <-r.unregisterClient:
+			log.Debugf("Removing client %s", c.info.Name)
+			r._removeClient(c)
+		case c := <-r.setSpeaker:
+			log.Debugf("Setting speaker %s", c.info.Name)
+			r.Speaker = c
+		case c := <-r.broadcastInfo:
+			log.Debugf("Broadcast room info to %s", c.info.Name)
+			r._broadCastRoomInfo(c)
+		case e := <-r.broadcast:
+			log.Debugf("Broadcasting %d", e.Type)
+			r._broadcast(e)
+		case <-r.done:
+			log.Infof("Room %d is closing", r.ID)
+			return
+		}
+		log.Debug("RunRoom tick")
 	}
 }
 
-func (r *Room) AddClient(c *Client) {
+// Broadcast information about the room
+func (r *Room) _broadCastRoomInfo(c *Client) {
 
-	r.Lock()
-	defer r.Unlock()
+	event, err := NewRoomInfoEvent(r)
 
+	if err == nil {
+		c.send <- *event
+	} else {
+		log.Error(err)
+	}
+
+}
+
+// Broadcast that a client has joined the room
+func (r *Room) _broadcastClientJoinedRoom(c *Client) {
+
+	event, err := NewJoinRoomEvent(c)
+
+	if err == nil {
+		r._broadcast(event)
+	} else {
+		log.Error(err)
+	}
+}
+
+// Broadcast that a client has left the room
+func (r *Room) _broadcastClientLeaveRoom(c *Client) {
+
+	event, err := NewLeaveRoomEvent(c)
+
+	if err == nil {
+		r._broadcast(event)
+	} else {
+		log.Error(err)
+	}
+}
+
+// Broadcast that the speaker has been set
+func (r *Room) _broadcastSetSpeaker() {
+
+	if r.Speaker == nil {
+		log.Warn("Cannot set speaker because speaker is nil")
+		return
+	}
+
+	event, err := NewSetSpeakerEvent(r.Speaker)
+
+	if err == nil {
+		r._broadcast(event)
+	} else {
+		log.Error(err)
+	}
+}
+
+// Adds the given client to the room
+func (r *Room) _addClient(c *Client) {
+
+	if r.Capacity == len(r.Clients) {
+
+		log.Warnf("Client %s cannot join room %d because it is full", c.info.Name, r.ID)
+		c.connection.Close()
+		return
+	}
+
+	log.Debugf("Client joined room; Now has %d members", len(r.Clients))
+
+	r._broadcastClientJoinedRoom(c)
 	r.Clients[c] = true
 
 	if len(r.Clients) == 1 {
@@ -190,13 +254,11 @@ func (r *Room) AddClient(c *Client) {
 		r.Speaker = c
 	}
 
-	log.Debugf("Client joined room; Now has %d members", len(r.Clients))
+	r._broadCastRoomInfo(c)
 }
 
-func (r *Room) RemoveClient(c *Client) {
-
-	r.Lock()
-	defer r.Unlock()
+// Remove the given client from the room
+func (r *Room) _removeClient(c *Client) {
 
 	if _, ok := r.Clients[c]; !ok {
 		return
@@ -205,10 +267,13 @@ func (r *Room) RemoveClient(c *Client) {
 	c.connection.Close()
 	delete(r.Clients, c)
 
+	r._broadcastClientLeaveRoom(c)
+
 	if r.Speaker == c {
 
 		for key := range r.Clients {
 			r.Speaker = key
+			r._broadcastSetSpeaker()
 			break
 		}
 	}
@@ -216,9 +281,21 @@ func (r *Room) RemoveClient(c *Client) {
 	log.Debugf("Client left room; Now has %d members", len(r.Clients))
 }
 
+// Broadcast the given even to all room members
+func (r *Room) _broadcast(e *Event) {
+
+	for client := range r.Clients {
+
+		log.Debugf("Broadcasting to client %d", client.info.Name)
+		client.send <- *e
+	}
+}
+
+// GET request handler for creating a new room
+// Room ids are 8byte integers now
 func (m *RoomManager) CreateRoomGET(c echo.Context) error {
 
-	rid, err := m.CreateRoom()
+	rid, err := m.CreateRoomID()
 
 	if err != nil {
 		log.Error(err)

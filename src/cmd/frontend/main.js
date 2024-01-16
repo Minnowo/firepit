@@ -9,7 +9,9 @@ function setSpeaker(speakerId) {
     const grid = document.getElementById("peopleGrid");
     const personElements = grid.getElementsByClassName("person");
     
+        console.log(speakerId)
      for (const personElement of personElements) {
+        console.log(personElement)
          if (personElement.dataset.clientId === speakerId) {
             const speakerH = document.getElementById("currentSpeaker");
             
@@ -126,7 +128,7 @@ function socket_connect(roomId){
             
             populatePeopleGrid(json.payload.room.room_members);
             
-            setSpeaker(json.payload.room.room_speaker);
+            setSpeaker(json.payload.room.room_speaker.client_id);
         }
 
         

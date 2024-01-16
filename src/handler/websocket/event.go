@@ -19,18 +19,28 @@ type Event struct {
 // depending on the type
 type EventHandler func(event Event, c *Client) error
 
+// These are the event types which are valid
 const (
-	SET_CLIENT_NAME         = 10
-	SET_CLIENT_POSITION     = 20
-	CLIENT_SET_SPEAKER      = 30
-	CLIENT_LEAVE_ROOM       = 40
-	CLIENT_JOIN_ROOM        = 50
-	CLIENT_WHO_AM_I_MESSAGE = 100
+	// used for a client to change their name
+	EVENT__SET_CLIENT_NAME = 10
 
-	ROOM_INFO = 60
+	// used for a client to change the speaker
+	EVENT__CLIENT_SET_SPEAKER = 30
 
-	SERVER_OK_MESSAGE  = 200
-	SERVER_BAD_MESSAGE = 400
+	// used when a client leaves the room
+	EVENT__CLIENT_LEAVE_ROOM = 40
+
+	// used when a client joins the room
+	EVENT__CLIENT_JOIN_ROOM = 50
+
+	// used to tell the client who they are
+	EVENT__CLIENT_WHO_AM_I = 100
+
+	// used to provide info about the joined room
+	EVENT__ROOM_INFO = 60
+
+	EVENT__SERVER_OK_MESSAGE  = 200
+	EVENT__SERVER_BAD_MESSAGE = 400
 )
 
 type BadMessageEvent struct {
@@ -61,23 +71,12 @@ type RoomInfoEvent struct {
 	Room *RoomJSON `json:"room"`
 }
 
-func NewRoomInfoEvent(room *Room) (*Event, error) {
+// Creates a new set speaker event
+func NewSetSpeakerEvent(c *Client) (*Event, error) {
 
-	var event RoomInfoEvent
+	var event SetSpeakerEvent
 
-	event.Room = &RoomJSON{
-		ID:                room.ID,
-		Name:              room.Name,
-		Clients:           room.Clients.ToSlice(),
-		Capacity:          room.Capacity,
-		RequireOccupation: room.RequireOccupation,
-	}
-
-	if room.Speaker != nil {
-		event.Room.Speaker = room.Speaker.info
-	}
-
-	log.Error(event.Room.Clients)
+	event.SpeakerID = c.info.DisplayId
 
 	jsonData, err := json.Marshal(&event)
 
@@ -87,10 +86,42 @@ func NewRoomInfoEvent(room *Room) (*Event, error) {
 	}
 
 	return &Event{
-		Type:    ROOM_INFO,
+		Type:    EVENT__CLIENT_SET_SPEAKER,
 		Payload: jsonData,
 	}, nil
 }
+
+// Creates a new room info event
+func NewRoomInfoEvent(room *Room) (*Event, error) {
+
+	var event RoomInfoEvent
+
+	event.Room = &RoomJSON{
+		ID:                room.ID,
+		Name:              room.Name,
+		Clients:           room.Clients.ToClientInfoSlice(),
+		Capacity:          room.Capacity,
+		RequireOccupation: room.RequireOccupation,
+	}
+
+	if room.Speaker != nil {
+		event.Room.Speaker = room.Speaker.info
+	}
+
+	jsonData, err := json.Marshal(&event)
+
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	return &Event{
+		Type:    EVENT__ROOM_INFO,
+		Payload: jsonData,
+	}, nil
+}
+
+// Creates a event with the given type which had only the data for a client
 func NewCommonClientEvent(type_ int, c *Client) (*Event, error) {
 
 	var event JoinRoomEvent
@@ -110,12 +141,17 @@ func NewCommonClientEvent(type_ int, c *Client) (*Event, error) {
 	}, nil
 }
 
+// Creates a new leave room event
 func NewLeaveRoomEvent(c *Client) (*Event, error) {
-	return NewCommonClientEvent(CLIENT_LEAVE_ROOM, c)
+	return NewCommonClientEvent(EVENT__CLIENT_LEAVE_ROOM, c)
 }
+
+// Creates a new join room event
 func NewJoinRoomEvent(c *Client) (*Event, error) {
-	return NewCommonClientEvent(CLIENT_JOIN_ROOM, c)
+	return NewCommonClientEvent(EVENT__CLIENT_JOIN_ROOM, c)
 }
+
+// Creates a new who am i event
 func NewWhoAmIEvent(c *Client) (*Event, error) {
-	return NewCommonClientEvent(CLIENT_WHO_AM_I_MESSAGE, c)
+	return NewCommonClientEvent(EVENT__CLIENT_WHO_AM_I, c)
 }

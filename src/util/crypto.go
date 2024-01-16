@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 )
 
+// Generates a 64bit number where all 8 bytes are not 0
 func GenerateFull64BitNumber() (uint64, error) {
 
 	var randomBytes [8]byte
