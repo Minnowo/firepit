@@ -39,9 +39,9 @@ func (c *ClientSet) ToClientInfoSlice() ClientInfoList {
 
 // The main client info
 type ClientInfo struct {
-	Name       string `json:"client_name" query:"client_name"`
-	DisplayId  string `json:"client_id" query:"client_id"`
-	Occupation string `json:"client_occupation" query:"client_occupation"`
+	Name       string `json:"client_name" query:"name"`
+	DisplayId  string `json:"client_id" query:"id"`
+	Occupation string `json:"client_occupation" query:"occup"`
 	RoomId     uint64 `query:"rid"`
 }
 
