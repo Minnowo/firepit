@@ -56,6 +56,7 @@ func main() {
 	initLogging(e)
 
 	e.Use(middleware.Recover())
+	e.Use(middleware.CORS())
 
 	e.GET("/ws", m.ServeWebsocket)
 	e.GET("/room/new", m.GetRoomManager().CreateRoomGET)
