@@ -2,10 +2,9 @@ package websocket
 
 import (
 	"net/http"
-	"strconv"
 	"sync"
 
-	"github.com/EZCampusDevs/firepit/util"
+	"github.com/EZCampusDevs/firepit/data"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 )
@@ -14,11 +13,12 @@ import (
 // RoomManager Code and Logic
 //
 
-type RoomList map[uint64]*Room
+type RoomList map[string]*Room
 
 // The main RoomManager type
 type RoomManager struct {
-	rooms RoomList
+	rooms             RoomList
+	roomCodeGenerator data.RoomCodeGenerator
 
 	// To ensure threadsafe handling of rooms
 	sync.RWMutex
@@ -27,18 +27,19 @@ type RoomManager struct {
 // Creates a new room manager
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
-		rooms: make(map[uint64]*Room),
+		rooms:             make(map[string]*Room),
+		roomCodeGenerator: data.NewUintNRoomCodeGenerator(3, 16),
 	}
 }
 
 // Get a unique room id
-func (r *RoomManager) CreateRoomID() (uint64, error) {
+func (r *RoomManager) CreateRoomID() (string, error) {
 
 	for {
-		rid, err := util.GenerateFull64BitNumber()
+		rid, err := r.roomCodeGenerator.GetRoomCode()
 
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 
 		if r.HasRoom(rid) {
@@ -56,9 +57,9 @@ func (r *RoomManager) CreateRoomID() (uint64, error) {
 }
 
 // Creates a new room with the given id
-func (r *RoomManager) AddRoom(rid uint64) {
+func (r *RoomManager) AddRoom(rid string) {
 
-	room := NewRoom(strconv.FormatUint(rid, 10), nil)
+	room := NewRoom(rid, nil)
 
 	// important we start the room loop here
 	go room.RunRoom()
@@ -70,7 +71,7 @@ func (r *RoomManager) AddRoom(rid uint64) {
 }
 
 // Checks if there is an existing room with this id
-func (r *RoomManager) HasRoom(rid uint64) bool {
+func (r *RoomManager) HasRoom(rid string) bool {
 
 	r.RLock()
 	defer r.RUnlock()
@@ -82,7 +83,7 @@ func (r *RoomManager) HasRoom(rid uint64) bool {
 }
 
 // Adds the given client to the room
-func (r *RoomManager) AddClientToRoom(rid uint64, c *Client) {
+func (r *RoomManager) AddClientToRoom(rid string, c *Client) {
 
 	r.RLock()
 	defer r.RUnlock()
@@ -94,7 +95,7 @@ func (r *RoomManager) AddClientToRoom(rid uint64, c *Client) {
 }
 
 // Removes the given client from the room
-func (r *RoomManager) RemoveRoomClient(rid uint64, c *Client) {
+func (r *RoomManager) RemoveRoomClient(rid string, c *Client) {
 
 	r.RLock()
 	defer r.RUnlock()
@@ -111,7 +112,7 @@ func (r *RoomManager) RemoveRoomClient(rid uint64, c *Client) {
 
 // The room type used for json
 type RoomJSON struct {
-	ID                uint64         `json:"room_code"`
+	ID                string         `json:"room_code"`
 	Name              string         `json:"room_name"`
 	Clients           ClientInfoList `json:"room_members"`
 	Speaker           *ClientInfo    `json:"room_speaker"`
@@ -121,7 +122,7 @@ type RoomJSON struct {
 
 // The main room type, used for logic
 type Room struct {
-	ID                uint64
+	ID                string
 	Name              string
 	Clients           ClientSet
 	Speaker           *Client
@@ -302,5 +303,5 @@ func (m *RoomManager) CreateRoomGET(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, "Server error")
 	}
 
-	return c.String(http.StatusOK, strconv.FormatUint(rid, 10))
+	return c.String(http.StatusOK, rid)
 }

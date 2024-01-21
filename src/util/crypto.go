@@ -3,20 +3,24 @@ package util
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 )
 
-// Generates a 64bit number where all 8 bytes are not 0
-func GenerateFull64BitNumber() (uint64, error) {
+func NBytesInt(bytes uint) (uint64, error) {
+
+	if bytes == 0 || bytes > 8 {
+		return 0, fmt.Errorf("Bytes must be 1:8")
+	}
 
 	var randomBytes [8]byte
 
-	_, err := rand.Read(randomBytes[:])
+	_, err := rand.Read(randomBytes[:bytes])
 
 	if err != nil {
 		return 0, err
 	}
 
-	full64BitNumber := binary.LittleEndian.Uint64(randomBytes[:])
+	num := binary.LittleEndian.Uint64(randomBytes[:])
 
-	return full64BitNumber, nil
+	return num, nil
 }

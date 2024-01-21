@@ -42,12 +42,12 @@ type ClientInfo struct {
 	Name       string `json:"client_name" query:"name"`
 	DisplayId  string `json:"client_id" query:"id"`
 	Occupation string `json:"client_occupation" query:"occup"`
-	RoomId     uint64 `query:"rid"`
+	RoomId     string `query:"rid"`
 }
 
 // Determines if the info is valid to form a websocket connection
 func (c *ClientInfo) IsValid() bool {
-	return !util.IsEmptyOrWhitespace(c.Name)
+	return !util.IsEmptyOrWhitespace(c.Name) && !util.IsEmptyOrWhitespace(c.RoomId)
 }
 
 // Client is a websocket client, basically a frontend visitor

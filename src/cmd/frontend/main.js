@@ -95,10 +95,10 @@ function socket_connect(roomId){
     console.log("Got room id from server " + roomId);
 
     var url = "ws://localhost:3000/ws";
-    url += "?client_name=";
+    url += "?name=";
     url += d.value;
-    url += "&client_id=nyah";
-    // url += "&client_occupation=test";
+    url += "&id=nyah";
+    // url += "&occu=test";
     url += "&rid=";
     url += roomId;
 
