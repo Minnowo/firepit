@@ -62,6 +62,9 @@ type Client struct {
 	// information about the client
 	info *ClientInfo
 
+	// the room the client is in
+	room *Room
+
 	// send is used to avoid concurrent writes on the WebSocket
 	send chan Event
 }
@@ -74,6 +77,22 @@ func NewClient(conn *websocket.Conn, manager *Manager, info *ClientInfo) *Client
 		info:       info,
 		send:       make(chan Event),
 	}
+}
+func NewClientInRoom(conn *websocket.Conn, manager *Manager, info *ClientInfo, room *Room) *Client {
+	return &Client{
+		connection: conn,
+		manager:    manager,
+		info:       info,
+		room:       room,
+		send:       make(chan Event),
+	}
+}
+
+// Close the clients connection
+func (c *Client) Disconnect() {
+
+	c.connection.Close()
+	c.room = nil
 }
 
 // Sends the WhoAmI event to the client
@@ -115,6 +134,12 @@ func (c *Client) readMessages() {
 
 	for {
 		_, payload, err := c.connection.ReadMessage()
+
+		if c.room == nil {
+			log.Errorf("Client %s does not have a room. Aborting connection", c.info.DisplayId)
+			c.connection.Close()
+			break
+		}
 
 		if err != nil {
 

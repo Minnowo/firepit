@@ -43,18 +43,7 @@ func (m *Manager) GetRoomManager() *RoomManager {
 
 // setupEventHandlers configures and adds all handlers
 func (m *Manager) setupEventHandlers() {
-	m.messageHandler[EVENT__SERVER_BAD_MESSAGE] = func(e Event, c *Client) error {
-		log.Info("BAD MESSAGE: ", e)
-		return nil
-	}
-	m.messageHandler[EVENT__SERVER_OK_MESSAGE] = func(e Event, c *Client) error {
-		log.Info("OK MESSAGE: ", e)
-		return nil
-	}
-	m.messageHandler[EVENT__CLIENT_SET_SPEAKER] = func(e Event, c *Client) error {
-		log.Info("Set SPEAKER: ", e)
-		return nil
-	}
+	m.messageHandler[EVENT__CLIENT_SET_SPEAKER] = handleSetSpeaker
 }
 
 // Calls the correct handler for the given event
@@ -98,11 +87,18 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
 	}
 
+	room, err := m.roomManager.GetRoomById(info.RoomId)
+
+	if err != nil {
+		log.Error(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
+	}
+
 	// create a public id for the user
 	info.DisplayId = util.GetUUID()
 
 	// create the client
-	client := NewClient(ws, m, &info)
+	client := NewClientInRoom(ws, m, &info, room)
 
 	// handle the clients read and write
 	go client.readMessages()
@@ -114,8 +110,8 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	// inform the client who they are
 	client.BroadcastWhoAmI()
 
-	// add the client to their requested room
-	m.roomManager.AddClientToRoom(info.RoomId, client)
+	// add the client to their room
+	client.room.registerClient <- client
 
 	return nil
 }

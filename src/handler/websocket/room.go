@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -82,8 +83,22 @@ func (r *RoomManager) HasRoom(rid string) bool {
 	return false
 }
 
+// Gets a room by id
+func (r *RoomManager) GetRoomById(rid string) (*Room, error) {
+
+	r.RLock()
+	defer r.RUnlock()
+
+	if room, ok := r.rooms[rid]; ok {
+
+		return room, nil
+	}
+
+	return nil, fmt.Errorf("Room does not exist")
+}
+
 // Adds the given client to the room
-func (r *RoomManager) AddClientToRoom(rid string, c *Client) {
+func (r *RoomManager) AddClientToRoom(rid string, c *Client) error {
 
 	r.RLock()
 	defer r.RUnlock()
@@ -91,11 +106,13 @@ func (r *RoomManager) AddClientToRoom(rid string, c *Client) {
 	if room, ok := r.rooms[rid]; ok {
 
 		room.registerClient <- c
+		return nil
 	}
+	return fmt.Errorf("Room does not exist")
 }
 
 // Removes the given client from the room
-func (r *RoomManager) RemoveRoomClient(rid string, c *Client) {
+func (r *RoomManager) RemoveRoomClient(rid string, c *Client) error {
 
 	r.RLock()
 	defer r.RUnlock()
@@ -103,7 +120,24 @@ func (r *RoomManager) RemoveRoomClient(rid string, c *Client) {
 	if room, ok := r.rooms[rid]; ok {
 
 		room.unregisterClient <- c
+		return nil
 	}
+	return fmt.Errorf("Room does not exist")
+}
+
+// Sets the clients room object
+func (r *RoomManager) SetClientRoomPtr(rid string, c *Client) error {
+
+	r.RLock()
+	defer r.RUnlock()
+
+	if room, ok := r.rooms[rid]; ok {
+
+		c.room = room
+		return nil
+	}
+
+	return fmt.Errorf("Room does not exist")
 }
 
 //
@@ -129,8 +163,8 @@ type Room struct {
 	Capacity          int
 	RequireOccupation bool
 
-	done             chan struct{}
-	setSpeaker       chan *Client
+	state            chan byte
+	setSpeakerById   chan string
 	registerClient   chan *Client
 	unregisterClient chan *Client
 	broadcastInfo    chan *Client
@@ -143,9 +177,9 @@ func NewRoom(name string, speaker *Client) *Room {
 		Name:             name,
 		Speaker:          speaker,
 		Capacity:         30,
-		done:             make(chan struct{}),
 		Clients:          make(ClientSet),
-		setSpeaker:       make(chan *Client),
+		state:            make(chan byte),
+		setSpeakerById:   make(chan string),
 		registerClient:   make(chan *Client),
 		unregisterClient: make(chan *Client),
 		broadcast:        make(chan *Event),
@@ -164,19 +198,49 @@ func (r *Room) RunRoom() {
 		case c := <-r.unregisterClient:
 			log.Debugf("Removing client %s", c.info.Name)
 			r._removeClient(c)
-		case c := <-r.setSpeaker:
-			log.Debugf("Setting speaker %s", c.info.Name)
-			r.Speaker = c
+		case c := <-r.setSpeakerById:
+			log.Debugf("Setting speaker by id %s", c)
+			r._setSpeakerById(c)
 		case c := <-r.broadcastInfo:
 			log.Debugf("Broadcast room info to %s", c.info.Name)
 			r._broadCastRoomInfo(c)
 		case e := <-r.broadcast:
 			log.Debugf("Broadcasting %d", e.Type)
 			r._broadcast(e)
-		case <-r.done:
-			log.Infof("Room %d is closing", r.ID)
-			return
+
+		// lets us handle pause, resume, and kill the thread
+		case s := <-r.state:
+
+			log.Debugf("Room state is %s", data.ChannelStateToString(s))
+
+			switch s {
+			default:
+			case data.CHAN__RUNNING:
+				continue
+			case data.CHAN__PAUSED:
+				break
+			case data.CHAN__DEAD:
+				return
+			}
+
+		lock:
+			for {
+
+				s = <-r.state
+
+				log.Debugf("Room state is %s", data.ChannelStateToString(s))
+
+				switch s {
+				case data.CHAN__RUNNING:
+					break lock
+				case data.CHAN__PAUSED:
+					break
+				case data.CHAN__DEAD:
+					return
+				}
+			}
 		}
+
 		log.Debug("RunRoom tick")
 	}
 }
@@ -235,6 +299,24 @@ func (r *Room) _broadcastSetSpeaker() {
 	}
 }
 
+// Set the speaker by id
+func (r *Room) _setSpeakerById(id string) {
+
+	for c := range r.Clients {
+
+		if c.info.DisplayId == id {
+
+			log.Debugf("Found new speaker %s", c.info.DisplayId)
+
+			r.Speaker = c
+
+			break
+		}
+	}
+
+	r._broadcastSetSpeaker()
+}
+
 // Adds the given client to the room
 func (r *Room) _addClient(c *Client) {
 
@@ -265,7 +347,8 @@ func (r *Room) _removeClient(c *Client) {
 		return
 	}
 
-	c.connection.Close()
+	c.Disconnect()
+
 	delete(r.Clients, c)
 
 	r._broadcastClientLeaveRoom(c)
@@ -287,7 +370,7 @@ func (r *Room) _broadcast(e *Event) {
 
 	for client := range r.Clients {
 
-		log.Debugf("Broadcasting to client %d", client.info.Name)
+		log.Debugf("Broadcasting to client %s", client.info.Name)
 		client.send <- *e
 	}
 }

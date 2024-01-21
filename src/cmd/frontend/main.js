@@ -169,7 +169,9 @@ function sendSetSpeakerMessage(){
         console.log("Sending message");
         ws.send(JSON.stringify({
             messageType : 30,
-            speaker_id : d.value
+            payload: {
+                speaker_id : d.value
+            }
         }));
     }
     else {
