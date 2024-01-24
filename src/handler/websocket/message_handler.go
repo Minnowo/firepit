@@ -25,6 +25,7 @@ func handleSetSpeaker(e_ Event, c *Client) error {
 	var e SetSpeakerEvent = SetSpeakerEvent{}
 
 	if err := json.Unmarshal(e_.Payload, &e); err != nil {
+		log.Error(e_.Payload)
 		return err
 	}
 

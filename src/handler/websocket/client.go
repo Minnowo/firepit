@@ -138,7 +138,7 @@ func (c *Client) readMessages() {
 		if c.room == nil {
 			log.Errorf("Client %s does not have a room. Aborting connection", c.info.DisplayId)
 			c.connection.Close()
-			break
+			return
 		}
 
 		if err != nil {
@@ -146,12 +146,12 @@ func (c *Client) readMessages() {
 			// If Connection is closed, we will Recieve an error here
 			// We only want to log Strange errors, but not simple Disconnection
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Infof("error reading message: %v", err)
+				log.Errorf("error reading message: %v", err)
 			}
 
 			log.Debug("Exiting message sink for client ", c, " error: ", err)
 
-			break
+			return
 		}
 
 		var request Event
