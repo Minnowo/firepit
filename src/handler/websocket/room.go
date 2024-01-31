@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/EZCampusDevs/firepit/data"
 	"github.com/labstack/echo/v4"
@@ -144,6 +145,10 @@ func (r *RoomManager) SetClientRoomPtr(rid string, c *Client) error {
 // Room Code and logic
 //
 
+var (
+	RoomEmptyCheckInterval = 2 * time.Minute
+)
+
 // The room type used for json
 type RoomJSON struct {
 	ID                string         `json:"room_code"`
@@ -162,6 +167,7 @@ type Room struct {
 	Speaker           *Client
 	Capacity          int
 	RequireOccupation bool
+	LastEmptyTime     time.Time
 
 	state            chan byte
 	setSpeakerById   chan string
@@ -190,6 +196,10 @@ func NewRoom(name string, speaker *Client) *Room {
 // Handle channel communication for the room
 func (r *Room) RunRoom() {
 
+	ticker := time.NewTicker(RoomEmptyCheckInterval)
+
+	defer ticker.Stop()
+
 	for {
 		select {
 		case c := <-r.registerClient:
@@ -208,6 +218,24 @@ func (r *Room) RunRoom() {
 			log.Debugf("Broadcasting %d", e.Type)
 			r._broadcast(e)
 
+		case time := <-ticker.C:
+
+			if len(r.Clients) > 0 {
+
+				r.LastEmptyTime = time
+
+				log.Debug("There are clients in the room!")
+
+				continue
+			}
+
+			log.Debug("There are no clients in the room!")
+
+			if time.Sub(r.LastEmptyTime) > RoomEmptyCheckInterval*2 {
+				log.Infof("Room %s has been empty for a long time! It is now dead.", r.ID)
+				return
+			}
+
 		// lets us handle pause, resume, and kill the thread
 		case s := <-r.state:
 
@@ -220,6 +248,7 @@ func (r *Room) RunRoom() {
 			case data.CHAN__PAUSED:
 				break
 			case data.CHAN__DEAD:
+				r._cleanupRoom()
 				return
 			}
 
@@ -236,6 +265,7 @@ func (r *Room) RunRoom() {
 				case data.CHAN__PAUSED:
 					break
 				case data.CHAN__DEAD:
+					r._cleanupRoom()
 					return
 				}
 			}
@@ -243,6 +273,16 @@ func (r *Room) RunRoom() {
 
 		log.Debug("RunRoom tick")
 	}
+}
+
+// Called to cleanup a room that has died
+func (r *Room) _cleanupRoom() {
+
+	for client := range r.Clients {
+		client.Disconnect()
+	}
+
+	r.Speaker = nil
 }
 
 // Broadcast information about the room
