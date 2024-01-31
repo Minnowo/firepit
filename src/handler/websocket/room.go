@@ -304,14 +304,21 @@ func (r *Room) _setSpeakerById(id string) {
 
 	for c := range r.Clients {
 
-		if c.info.DisplayId == id {
-
-			log.Debugf("Found new speaker %s", c.info.DisplayId)
-
-			r.Speaker = c
-
-			break
+		if c.info.DisplayId != id {
+			continue
 		}
+
+		if r.Speaker != nil {
+			r.Clients[c] = r.Clients[r.Speaker] + 1
+		} else {
+			r.Clients[c] = 1
+		}
+
+		log.Debugf("Found new speaker %s", c.info.DisplayId)
+
+		r.Speaker = c
+
+		break
 	}
 
 	r._broadcastSetSpeaker()
@@ -330,11 +337,14 @@ func (r *Room) _addClient(c *Client) {
 	log.Debugf("Client joined room; Now has %d members", len(r.Clients))
 
 	r._broadcastClientJoinedRoom(c)
-	r.Clients[c] = true
 
-	if len(r.Clients) == 1 {
+	if len(r.Clients) == 0 {
 
 		r.Speaker = c
+		r.Clients[c] = 1
+	} else {
+
+		r.Clients[c] = 0
 	}
 
 	r._broadCastRoomInfo(c)
@@ -353,16 +363,23 @@ func (r *Room) _removeClient(c *Client) {
 
 	r._broadcastClientLeaveRoom(c)
 
-	if r.Speaker == c {
+	log.Debugf("Client left room; Now has %d members", len(r.Clients))
 
-		for key := range r.Clients {
-			r.Speaker = key
-			r._broadcastSetSpeaker()
-			break
+	if r.Speaker != c {
+		return
+	}
+
+	var maxRank uint32 = 0
+
+	for client, rank := range r.Clients {
+
+		if rank > maxRank {
+			maxRank = rank
+			r.Speaker = client
 		}
 	}
 
-	log.Debugf("Client left room; Now has %d members", len(r.Clients))
+	r._broadcastSetSpeaker()
 }
 
 // Broadcast the given even to all room members

@@ -21,7 +21,7 @@ var (
 
 type ClientList []*Client
 type ClientInfoList []*ClientInfo
-type ClientSet map[*Client]bool
+type ClientSet map[*Client]uint32
 
 // Used to convert the ClientSet into something json serializable
 func (c *ClientSet) ToClientInfoSlice() ClientInfoList {
