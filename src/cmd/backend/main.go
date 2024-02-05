@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/EZCampusDevs/firepit/database"
 	"github.com/EZCampusDevs/firepit/handler"
 	"github.com/EZCampusDevs/firepit/handler/websocket"
 	"github.com/labstack/echo/v4"
@@ -45,21 +46,42 @@ func initLogging(app *echo.Echo) {
 	log.SetLevel(app.Logger.Level())
 }
 
+func getDBConf() *database.DBConfig {
+	return &database.DBConfig{
+		Username:     "root",
+		Password:     "root",
+		Hostname:     "127.0.0.1",
+		Port:         3306,
+		DatabaseName: "golang-test",
+	}
+}
+
 func main() {
 
 	var e *echo.Echo
 	var m *websocket.Manager
+	var c *database.DBConfig
 
 	e = echo.New()
 	m = websocket.NewManager()
+	c = getDBConf()
 
 	initLogging(e)
+
+	database.DBInit(c)
 
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
 	e.GET("/ws", m.ServeWebsocket)
-	e.GET("/room/new", m.GetRoomManager().CreateRoomGET)
+
+	roomGroup := e.Group("/room")
+	roomGroup.GET("/new", m.GetRoomManager().CreateRoomGET)
+
+	quoteGroup := e.Group("/quote")
+	quoteGroup.GET("", handler.GetRandomQuote)
+	quoteGroup.POST("", handler.CreateNewQuote)
+
 	e.RouteNotFound("/", handler.Heartbeat)
 
 	e.Logger.Fatal(e.Start(":3000"))
