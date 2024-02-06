@@ -1,5 +1,5 @@
 
-@PHONY: run debug build bin_dir
+@PHONY: run debug build bin_dir create_db
 
 all: debug
 
@@ -14,3 +14,13 @@ run:  | bin_dir
 
 debug: | bin_dir
 	@DEBUG=true go run cmd/backend/main.go
+
+
+create_db:
+	docker run \
+		--detach \
+		--name "golang-test" \
+		--env MARIADB_ROOT_PASSWORD="root" \
+		--env MARIADB_DATABASE="golang-test" \
+		-p 127.0.0.1:3306:3306 \
+		mariadb:latest
