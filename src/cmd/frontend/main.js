@@ -8,39 +8,43 @@ function setSpeaker(speakerId) {
 
     const grid = document.getElementById("peopleGrid");
     const personElements = grid.getElementsByClassName("person");
-    
-        console.log(speakerId)
-     for (const personElement of personElements) {
+
+    console.log(speakerId)
+    for (const personElement of personElements) {
         console.log(personElement)
-         if (personElement.dataset.clientId === speakerId) {
+        if (personElement.dataset.clientId === speakerId) {
             const speakerH = document.getElementById("currentSpeaker");
-            
+
             speakerH.textContent = personElement.textContent;
-             break;
-         }
-     }
+            break;
+        }
+    }
 }
 
- function removePerson(clientId) {
+function removePerson(clientId) {
     const grid = document.getElementById("peopleGrid");
     const personElements = grid.getElementsByClassName("person");
-    
-     for (const personElement of personElements) {
-         if (personElement.dataset.clientId === clientId) {
-             console.log(`person with id ${clientId} was removed`);
-             grid.removeChild(personElement);
-             break;
-         }
-     }
+
+    for (const personElement of personElements) {
+        if (personElement.dataset.clientId === clientId) {
+            console.log(`person with id ${clientId} was removed`);
+            grid.removeChild(personElement);
+            break;
+        }
+    }
 }
 
 function addPersonToGrid(person) {
-    
+
     const grid = document.getElementById("peopleGrid");
     const personElement = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.innerHTML = "make speaker";
+    btn.onclick = function(){setSpeakerById(person.client_id)}
     personElement.classList.add("person");
     personElement.textContent = person.client_name;
     personElement.dataset.clientId = person.client_id;
+    personElement.appendChild(btn);
     grid.appendChild(personElement);
 }
 
@@ -58,9 +62,9 @@ function getOKMessage(){
 }
 
 function joinRoom(){
-   var a = document.getElementById("roomId"); 
-    
-   socket_connect(a.value);
+    var a = document.getElementById("roomId"); 
+
+    socket_connect(a.value);
 }
 
 function newRoom() {
@@ -73,11 +77,11 @@ function newRoom() {
     fetch(`http://${HOST}/room/new`, {
         method: 'GET',
     })
-    .then(response => response.text())
-    .then(roomId => {
-        socket_connect(roomId);
-    })
-    .catch(error => console.error('Error:', error));
+        .then(response => response.text())
+        .then(roomId => {
+            socket_connect(roomId);
+        })
+        .catch(error => console.error('Error:', error));
 }
 
 function socket_connect(roomId){
@@ -91,7 +95,7 @@ function socket_connect(roomId){
         ws.close();
     }
     const d = document.getElementById("clientName");
-    
+
     console.log("Got room id from server " + roomId);
 
     var url = "ws://localhost:3000/ws";
@@ -112,7 +116,7 @@ function socket_connect(roomId){
     // parse messages received from the server and update the UI accordingly
     ws.onmessage = function (event) {
         console.log("room data: " + event.data);
-        
+
 
         const json = JSON.parse(event.data);
 
@@ -122,31 +126,31 @@ function socket_connect(roomId){
 
         console.log(json);
 
-        
+
         // room info message
         if(json.messageType === 60) {
-            
+
             populatePeopleGrid(json.payload.room.room_members);
-            
+
             setSpeaker(json.payload.room.room_speaker.client_id);
         }
 
-        
+
         // client joins room
         if(json.messageType === 50) {
-            
+
             addPersonToGrid(json.payload.client);
         }
 
         // client leaves room
         if(json.messageType === 40) {
-            
+
             removePerson(json.payload.client.client_id);
         }
-        
+
         // set speaker 
         if(json.messageType === 30) {
-            
+
             console.log("Setting speaker to " + json.payload.speaker_id);
             setSpeaker(json.payload.speaker_id);
         }
@@ -160,23 +164,27 @@ function sendMessage(){
     }
 }
 
-function sendSetSpeakerMessage(){
-    
-    const d = document.getElementById("newSpeakerId");
-    console.log("setting speaker to " + d.value);
-    
+function setSpeakerById(id){
+
     if(ws && ws.readyState === WebSocket.OPEN){
         console.log("Sending message");
         ws.send(JSON.stringify({
             messageType : 30,
             payload: {
-                speaker_id : d.value
+                speaker_id : id
             }
         }));
     }
     else {
         console.log("socket is closed");
     }
+}
+function sendSetSpeakerMessage(){
+
+    const d = document.getElementById("newSpeakerId");
+    console.log("setting speaker to " + d.value);
+    setSpeakerById(d.value);
+
 }
 
 function sendOKMessage(){
@@ -202,18 +210,18 @@ function sendBadMessage(){
 
 
 (function(){
-    
+
     // fetch(`http://${HOST}`, {
     //     method: 'GET',
     // })
     //     .then(x => x.json())
     //     .then(json => {
-        
+
     //         console.log(json);
 
     // });
-    
 
-    
+
+
     console.log("Client Open");
 }())

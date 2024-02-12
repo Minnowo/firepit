@@ -22,27 +22,44 @@ var (
 type ClientList []*Client
 type ClientInfoList []*ClientInfo
 type ClientSet map[*Client]uint32
+type ClientStatus uint32
+
+const (
+	STATUS_CLIENT_OK                ClientStatus = iota
+	STATUS_CLIENT_LEFT              ClientStatus = iota
+	STATUS_CLIENT_DISCONNECTED      ClientStatus = iota
+	STATUS_CLIENT_REMOVED_BY_SERVER ClientStatus = iota
+)
 
 // Used to convert the ClientSet into something json serializable
-func (c *ClientSet) ToClientInfoSlice() ClientInfoList {
+func (c *ClientList) ToClientInfoSlice() ClientInfoList {
 
 	keys := make([]*ClientInfo, len(*c))
 
 	i := 0
-	for k := range *c {
+	for _, k := range *c {
+
+		if k == nil {
+			continue
+		}
+
 		keys[i] = k.info
 		i++
 	}
+
+	keys = keys[0:i]
 
 	return keys
 }
 
 // The main client info
 type ClientInfo struct {
-	Name       string `json:"client_name" query:"name"`
-	DisplayId  string `json:"client_id" query:"id"`
-	Occupation string `json:"client_occupation" query:"occup"`
-	RoomId     string `query:"rid"`
+	Name        string `json:"client_name" query:"name"`
+	DisplayId   string `json:"client_id" query:"id"`
+	Occupation  string `json:"client_occupation" query:"occup"`
+	Number      uint32 `json:"order"`
+	RoomId      string `json:"-" query:"rid"`
+	SpeakerRank uint32 `json:"-"`
 }
 
 // Determines if the info is valid to form a websocket connection
@@ -65,6 +82,8 @@ type Client struct {
 	// the room the client is in
 	room *Room
 
+	status ClientStatus
+
 	// send is used to avoid concurrent writes on the WebSocket
 	send chan Event
 }
@@ -75,15 +94,18 @@ func NewClient(conn *websocket.Conn, manager *Manager, info *ClientInfo) *Client
 		connection: conn,
 		manager:    manager,
 		info:       info,
+		status:     STATUS_CLIENT_OK,
 		send:       make(chan Event),
 	}
 }
+
 func NewClientInRoom(conn *websocket.Conn, manager *Manager, info *ClientInfo, room *Room) *Client {
 	return &Client{
 		connection: conn,
 		manager:    manager,
 		info:       info,
 		room:       room,
+		status:     STATUS_CLIENT_OK,
 		send:       make(chan Event),
 	}
 }
@@ -98,6 +120,11 @@ func (c *Client) Disconnect() {
 // Sends the WhoAmI event to the client
 func (c *Client) BroadcastWhoAmI() {
 
+	if c.status != STATUS_CLIENT_OK {
+
+		return
+	}
+
 	event, err := NewWhoAmIEvent(c)
 
 	if err == nil {
@@ -109,7 +136,6 @@ func (c *Client) BroadcastWhoAmI() {
 
 // Sends the pong message to the client
 func (c *Client) pongHandler(_ string) error {
-	log.Debug("pong")
 	return c.connection.SetReadDeadline(time.Now().Add(pongWait))
 }
 
@@ -119,13 +145,18 @@ func (c *Client) readMessages() {
 
 	// cleanup
 	defer func() {
+
 		c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
 	}()
 
 	// Configure Wait time for Pong response, use Current time + pongWait
 	// This has to be done here to set the first initial timer.
 	if err := c.pongHandler(""); err != nil {
+
 		log.Error(err)
+
+		c.status = STATUS_CLIENT_REMOVED_BY_SERVER
+
 		return
 	}
 
@@ -136,8 +167,13 @@ func (c *Client) readMessages() {
 		_, payload, err := c.connection.ReadMessage()
 
 		if c.room == nil {
+
 			log.Errorf("Client %s does not have a room. Aborting connection", c.info.DisplayId)
+
 			c.connection.Close()
+
+			c.status = STATUS_CLIENT_REMOVED_BY_SERVER
+
 			return
 		}
 
@@ -146,7 +182,15 @@ func (c *Client) readMessages() {
 			// If Connection is closed, we will Recieve an error here
 			// We only want to log Strange errors, but not simple Disconnection
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+
 				log.Errorf("error reading message: %v", err)
+
+				c.status = STATUS_CLIENT_DISCONNECTED
+
+			} else {
+
+				c.status = STATUS_CLIENT_LEFT
+
 			}
 
 			log.Debug("Exiting message sink for client ", c, " error: ", err)
@@ -157,12 +201,15 @@ func (c *Client) readMessages() {
 		var request Event
 
 		if err := json.Unmarshal(payload, &request); err != nil {
+
 			log.Errorf("error marshalling message: %v", err)
+
 			continue
 		}
 
 		// Route the Event and handle the client's message
 		if err := c.manager.routeEvent(request, c); err != nil {
+
 			log.Error("Error handeling Message: ", err)
 		}
 	}
@@ -180,7 +227,9 @@ func (c *Client) writeMessages() {
 
 	// cleanup
 	defer func() {
+
 		ticker.Stop()
+
 		c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
 	}()
 
@@ -191,10 +240,12 @@ func (c *Client) writeMessages() {
 		// when we get tick events ping the client
 		case <-ticker.C:
 
-			log.Debug("ping")
-
 			if err := c.connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+
 				log.Error("Cannot ping client: ", err)
+
+				c.status = STATUS_CLIENT_DISCONNECTED
+
 				return
 			}
 
@@ -203,10 +254,13 @@ func (c *Client) writeMessages() {
 
 			// channel has been closed
 			if !ok {
+
 				// Manager has closed this connection channel, so communicate that to frontend
 				if err = c.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
 					log.Warn("connection closed: ", err)
 				}
+
+				c.status = STATUS_CLIENT_DISCONNECTED
 
 				return
 			}
@@ -214,11 +268,16 @@ func (c *Client) writeMessages() {
 			data, err = json.Marshal(message)
 
 			if err != nil {
+
 				log.Error(err)
+
+				c.status = STATUS_CLIENT_REMOVED_BY_SERVER
+
 				return
 			}
 
 			if err = c.connection.WriteMessage(websocket.TextMessage, data); err != nil {
+
 				log.Error(err)
 			}
 

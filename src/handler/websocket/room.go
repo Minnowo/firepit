@@ -155,7 +155,7 @@ type RoomJSON struct {
 	Name              string         `json:"room_name"`
 	Clients           ClientInfoList `json:"room_members"`
 	Speaker           *ClientInfo    `json:"room_speaker"`
-	Capacity          int            `json:"room_capacity"`
+	Capacity          uint32         `json:"room_capacity"`
 	RequireOccupation bool           `json:"room_occupation"`
 }
 
@@ -163,9 +163,10 @@ type RoomJSON struct {
 type Room struct {
 	ID                string
 	Name              string
-	Clients           ClientSet
+	Size              uint32
+	Clients           ClientList
 	Speaker           *Client
-	Capacity          int
+	Capacity          uint32
 	RequireOccupation bool
 	LastEmptyTime     time.Time
 
@@ -179,11 +180,13 @@ type Room struct {
 
 // Create a new room
 func NewRoom(name string, speaker *Client) *Room {
+	const capacity uint32 = 30
+
 	return &Room{
 		Name:             name,
 		Speaker:          speaker,
-		Capacity:         30,
-		Clients:          make(ClientSet),
+		Capacity:         capacity,
+		Clients:          make(ClientList, capacity),
 		state:            make(chan byte),
 		setSpeakerById:   make(chan string),
 		registerClient:   make(chan *Client),
@@ -203,16 +206,16 @@ func (r *Room) RunRoom() {
 	for {
 		select {
 		case c := <-r.registerClient:
-			log.Debugf("Adding client %s", c.info.Name)
+			log.Debugf("Adding client %s", c.info.DisplayId)
 			r._addClient(c)
 		case c := <-r.unregisterClient:
-			log.Debugf("Removing client %s", c.info.Name)
+			log.Debugf("Removing client %s", c.info.DisplayId)
 			r._removeClient(c)
 		case c := <-r.setSpeakerById:
 			log.Debugf("Setting speaker by id %s", c)
 			r._setSpeakerById(c)
 		case c := <-r.broadcastInfo:
-			log.Debugf("Broadcast room info to %s", c.info.Name)
+			log.Debugf("Broadcast room info to %s", c.info.DisplayId)
 			r._broadCastRoomInfo(c)
 		case e := <-r.broadcast:
 			log.Debugf("Broadcasting %d", e.Type)
@@ -278,8 +281,13 @@ func (r *Room) RunRoom() {
 // Called to cleanup a room that has died
 func (r *Room) _cleanupRoom() {
 
-	for client := range r.Clients {
-		client.Disconnect()
+	for i := uint32(0); i < r.Size; i++ {
+
+		client := r.Clients[i]
+
+		if client != nil {
+			client.Disconnect()
+		}
 	}
 
 	r.Speaker = nil
@@ -342,16 +350,22 @@ func (r *Room) _broadcastSetSpeaker() {
 // Set the speaker by id
 func (r *Room) _setSpeakerById(id string) {
 
-	for c := range r.Clients {
+	for i := uint32(0); i < r.Size; i++ {
+
+		c := r.Clients[i]
+
+		if c == nil {
+			continue
+		}
 
 		if c.info.DisplayId != id {
 			continue
 		}
 
 		if r.Speaker != nil {
-			r.Clients[c] = r.Clients[r.Speaker] + 1
+			c.info.SpeakerRank = r.Speaker.info.SpeakerRank + 1
 		} else {
-			r.Clients[c] = 1
+			c.info.SpeakerRank = 1
 		}
 
 		log.Debugf("Found new speaker %s", c.info.DisplayId)
@@ -367,25 +381,31 @@ func (r *Room) _setSpeakerById(id string) {
 // Adds the given client to the room
 func (r *Room) _addClient(c *Client) {
 
-	if r.Capacity == len(r.Clients) {
+	if r.Capacity == r.Size {
 
 		log.Warnf("Client %s cannot join room %d because it is full", c.info.Name, r.ID)
+
 		c.connection.Close()
+
 		return
 	}
 
-	log.Debugf("Client joined room; Now has %d members", len(r.Clients))
-
 	r._broadcastClientJoinedRoom(c)
 
-	if len(r.Clients) == 0 {
+	if r.Size == 0 {
 
 		r.Speaker = c
-		r.Clients[c] = 1
+		c.info.SpeakerRank = 1
 	} else {
 
-		r.Clients[c] = 0
+		c.info.SpeakerRank = 0
 	}
+
+	r.Clients[r.Size] = c
+	r.Size += 1
+
+	log.Debugf("Client joined room; Now has %d members", r.Size)
+	log.Info(r.Clients)
 
 	r._broadCastRoomInfo(c)
 }
@@ -393,29 +413,74 @@ func (r *Room) _addClient(c *Client) {
 // Remove the given client from the room
 func (r *Room) _removeClient(c *Client) {
 
-	if _, ok := r.Clients[c]; !ok {
+	if c == nil {
 		return
 	}
 
-	c.Disconnect()
+	log.Infof("Client %s is being removed from the room", c.info.DisplayId)
 
-	delete(r.Clients, c)
+	for i := uint32(0); i < r.Size; i++ {
 
-	r._broadcastClientLeaveRoom(c)
+		cl := r.Clients[i]
 
-	log.Debugf("Client left room; Now has %d members", len(r.Clients))
+		if cl != c {
 
-	if r.Speaker != c {
-		return
+			continue
+		}
+
+		switch c.status {
+		case STATUS_CLIENT_LEFT:
+		case STATUS_CLIENT_REMOVED_BY_SERVER:
+			r.Clients[i] = nil
+			break
+
+		case STATUS_CLIENT_DISCONNECTED:
+			break
+
+		case STATUS_CLIENT_OK:
+
+			log.Warnf("Speaker %s is leaving with ok stsatus", c.info.DisplayId)
+
+			c.status = STATUS_CLIENT_DISCONNECTED
+			break
+		}
+
+		log.Infof("Client %s has been disconnected", c.info.DisplayId)
+
+		c.Disconnect()
+
+		r._broadcastClientLeaveRoom(c)
+
+		log.Debugf("Client left room; Now has %d members", len(r.Clients))
+
+		break
 	}
 
-	var maxRank uint32 = 0
+	if c == r.Speaker {
 
-	for client, rank := range r.Clients {
+		r._findNextBestSpeaker()
+	}
+}
 
-		if rank > maxRank {
-			maxRank = rank
-			r.Speaker = client
+func (r *Room) _findNextBestSpeaker() {
+
+	for i := uint32(0); i < r.Size; i++ {
+
+		cl := r.Clients[i]
+
+		if cl == nil || cl.status != STATUS_CLIENT_OK {
+			continue
+		}
+
+		if r.Speaker.status != STATUS_CLIENT_OK {
+
+			r.Speaker = cl
+			continue
+		}
+
+		if cl.info.SpeakerRank > r.Speaker.info.SpeakerRank {
+
+			r.Speaker = cl
 		}
 	}
 
@@ -425,9 +490,16 @@ func (r *Room) _removeClient(c *Client) {
 // Broadcast the given even to all room members
 func (r *Room) _broadcast(e *Event) {
 
-	for client := range r.Clients {
+	for i := uint32(0); i < r.Size; i++ {
 
-		log.Debugf("Broadcasting to client %s", client.info.Name)
+		client := r.Clients[i]
+
+		if client == nil || client.status != STATUS_CLIENT_OK {
+			continue
+		}
+
+		log.Debugf("Broadcasting to client %s", client.info.DisplayId)
+
 		client.send <- *e
 	}
 }
