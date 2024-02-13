@@ -63,8 +63,9 @@ function getOKMessage(){
 
 function joinRoom(){
     var a = document.getElementById("roomId"); 
+    var b = document.getElementById("reconnectToken"); 
 
-    socket_connect(a.value);
+    socket_connect(a.value, b.value);
 }
 
 function newRoom() {
@@ -79,12 +80,12 @@ function newRoom() {
     })
         .then(response => response.text())
         .then(roomId => {
-            socket_connect(roomId);
+            socket_connect(roomId, 0);
         })
         .catch(error => console.error('Error:', error));
 }
 
-function socket_connect(roomId){
+function socket_connect(roomId, reconnectToken){
 
     if(ws && ws.readyState === WebSocket.OPEN){
         console.log("already in a room")
@@ -101,10 +102,12 @@ function socket_connect(roomId){
     var url = "ws://localhost:3000/ws";
     url += "?name=";
     url += d.value;
-    url += "&id=nyah";
-    // url += "&occu=test";
+
     url += "&rid=";
     url += roomId;
+
+    url += "&rtoken=";
+    url += reconnectToken;
 
     ws = new WebSocket(url);
 
@@ -126,6 +129,9 @@ function socket_connect(roomId){
 
         console.log(json);
 
+        if(json.messageType === 100) {
+            document.getElementById("reconnectToken").value = json.payload.reconnection_token
+        }
 
         // room info message
         if(json.messageType === 60) {

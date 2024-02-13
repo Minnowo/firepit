@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/EZCampusDevs/firepit/util"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
@@ -100,11 +101,20 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	// create the client
 	client := NewClientInRoom(ws, m, &info, room)
 
+	if err := uuid.Validate(info.ReconnectionToken); err == nil {
+
+		client.status = STATUS_CLIENT_RECONNECT
+
+	} else {
+
+		client.info.ReconnectionToken = util.GetUUID()
+	}
+
 	// handle the clients read and write
 	go client.readMessages()
 	go client.writeMessages()
 
-	log.Debug("Adding new client", client)
+	log.Debug("Adding new client", client.info.DisplayId)
 	log.Debug("                 ", info)
 
 	// inform the client who they are

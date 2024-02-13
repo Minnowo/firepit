@@ -281,9 +281,7 @@ func (r *Room) RunRoom() {
 // Called to cleanup a room that has died
 func (r *Room) _cleanupRoom() {
 
-	for i := uint32(0); i < r.Size; i++ {
-
-		client := r.Clients[i]
+	for _, client := range r.Clients {
 
 		if client != nil {
 			client.Disconnect()
@@ -350,11 +348,9 @@ func (r *Room) _broadcastSetSpeaker() {
 // Set the speaker by id
 func (r *Room) _setSpeakerById(id string) {
 
-	for i := uint32(0); i < r.Size; i++ {
+	for _, c := range r.Clients {
 
-		c := r.Clients[i]
-
-		if c == nil {
+		if c == nil || c.status != STATUS_CLIENT_OK {
 			continue
 		}
 
@@ -383,9 +379,37 @@ func (r *Room) _addClient(c *Client) {
 
 	if r.Capacity == r.Size {
 
-		log.Warnf("Client %s cannot join room %d because it is full", c.info.Name, r.ID)
+		log.Warnf("Client %s cannot join room %d because it is full", c.info.DisplayId, r.ID)
 
 		c.connection.Close()
+
+		return
+	}
+
+	if c.status == STATUS_CLIENT_RECONNECT {
+
+		log.Infof("Client %s is trying to reconnect!", c.info.DisplayId)
+
+		if r._tryReconnectClient(c) {
+
+			log.Infof("Client %s has reconnected!", c.info.DisplayId)
+
+			r._broadcastClientJoinedRoom(c)
+
+			if r.Size == 0 {
+				r.Speaker = c
+			}
+
+			r.Size++
+
+			r._broadCastRoomInfo(c)
+
+			return
+		}
+
+		log.Errorf("Client %s failed to reconnect!", c.info.DisplayId)
+
+		c.Disconnect()
 
 		return
 	}
@@ -401,13 +425,73 @@ func (r *Room) _addClient(c *Client) {
 		c.info.SpeakerRank = 0
 	}
 
-	r.Clients[r.Size] = c
-	r.Size += 1
+	// if all clients in the array are not null
+	// we will replace a disconnected client
+	var replaceDisconnectedIndex int = -1
 
-	log.Debugf("Client joined room; Now has %d members", r.Size)
+	// find a new spot for the client
+	for i, client := range r.Clients {
+
+		if client == nil {
+
+			c.info.Number = uint32(i)
+
+			r.Clients[i] = c
+
+			r.Size += 1
+
+			replaceDisconnectedIndex = -1
+
+			break
+		}
+
+		if replaceDisconnectedIndex == -1 && client.status != STATUS_CLIENT_OK {
+
+			replaceDisconnectedIndex = i
+		}
+	}
+
+	// will be -1 if there is no non-null client to replace
+	if replaceDisconnectedIndex != -1 {
+
+		c.info.Number = uint32(replaceDisconnectedIndex)
+
+		r.Clients[replaceDisconnectedIndex] = c
+
+		r.Size += 1
+	}
+
+	log.Debugf("Client joined room; Can reconnect with %d; Now has %d members", c.info.ReconnectionToken, r.Size)
 	log.Info(r.Clients)
 
 	r._broadCastRoomInfo(c)
+}
+
+// try and reconnect the client
+// if a disconnected client has the same ReconnectionToken it will be replaced with the given client
+func (r *Room) _tryReconnectClient(c *Client) bool {
+
+	for i, client := range r.Clients {
+
+		if client == nil || client.status == STATUS_CLIENT_OK {
+			continue
+		}
+
+		if client.info.ReconnectionToken == c.info.ReconnectionToken {
+
+			c.status = STATUS_CLIENT_OK
+
+			c.info = client.info
+
+			client.info = nil
+
+			r.Clients[i] = c
+
+			return true
+		}
+	}
+
+	return false
 }
 
 // Remove the given client from the room
@@ -451,7 +535,9 @@ func (r *Room) _removeClient(c *Client) {
 
 		r._broadcastClientLeaveRoom(c)
 
-		log.Debugf("Client left room; Now has %d members", len(r.Clients))
+		r.Size--
+
+		log.Debugf("Client left room; Now has %d members", r.Size)
 
 		break
 	}
@@ -464,9 +550,13 @@ func (r *Room) _removeClient(c *Client) {
 
 func (r *Room) _findNextBestSpeaker() {
 
-	for i := uint32(0); i < r.Size; i++ {
+	if r.Size == 0 {
 
-		cl := r.Clients[i]
+		r.Speaker = nil
+		return
+	}
+
+	for _, cl := range r.Clients {
 
 		if cl == nil || cl.status != STATUS_CLIENT_OK {
 			continue

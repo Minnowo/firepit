@@ -64,7 +64,8 @@ type LeaveRoomEvent struct {
 }
 
 type WhoAmIEvent struct {
-	ClientInfo *ClientInfo `json:"client"`
+	ClientInfo        *ClientInfo `json:"client"`
+	ReconnectionToken string      `json:"reconnection_token"`
 }
 
 type RoomInfoEvent struct {
@@ -153,5 +154,21 @@ func NewJoinRoomEvent(c *Client) (*Event, error) {
 
 // Creates a new who am i event
 func NewWhoAmIEvent(c *Client) (*Event, error) {
-	return NewCommonClientEvent(EVENT__CLIENT_WHO_AM_I, c)
+
+	var event WhoAmIEvent
+
+	event.ClientInfo = c.info
+	event.ReconnectionToken = c.info.ReconnectionToken
+
+	jsonData, err := json.Marshal(&event)
+
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	return &Event{
+		Type:    EVENT__CLIENT_WHO_AM_I,
+		Payload: jsonData,
+	}, nil
 }

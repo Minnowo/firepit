@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/EZCampusDevs/firepit/util"
@@ -29,6 +30,8 @@ const (
 	STATUS_CLIENT_LEFT              ClientStatus = iota
 	STATUS_CLIENT_DISCONNECTED      ClientStatus = iota
 	STATUS_CLIENT_REMOVED_BY_SERVER ClientStatus = iota
+	STATUS_CLIENT_RECONNECT         ClientStatus = iota
+	STATUS_CLIENT_NULL              ClientStatus = iota
 )
 
 // Used to convert the ClientSet into something json serializable
@@ -39,7 +42,7 @@ func (c *ClientList) ToClientInfoSlice() ClientInfoList {
 	i := 0
 	for _, k := range *c {
 
-		if k == nil {
+		if k == nil || k.status != STATUS_CLIENT_OK {
 			continue
 		}
 
@@ -54,12 +57,13 @@ func (c *ClientList) ToClientInfoSlice() ClientInfoList {
 
 // The main client info
 type ClientInfo struct {
-	Name        string `json:"client_name" query:"name"`
-	DisplayId   string `json:"client_id" query:"id"`
-	Occupation  string `json:"client_occupation" query:"occup"`
-	Number      uint32 `json:"order"`
-	RoomId      string `json:"-" query:"rid"`
-	SpeakerRank uint32 `json:"-"`
+	Name              string `json:"client_name" query:"name"`
+	DisplayId         string `json:"client_id" query:"id"`
+	Occupation        string `json:"client_occupation" query:"occup"`
+	Number            uint32 `json:"order"`
+	RoomId            string `json:"-" query:"rid"`
+	ReconnectionToken string `json:"-" query:"rtoken"`
+	SpeakerRank       uint32 `json:"-"`
 }
 
 // Determines if the info is valid to form a websocket connection
@@ -86,6 +90,8 @@ type Client struct {
 
 	// send is used to avoid concurrent writes on the WebSocket
 	send chan Event
+
+	once sync.Once
 }
 
 // Creates a new client
@@ -96,6 +102,7 @@ func NewClient(conn *websocket.Conn, manager *Manager, info *ClientInfo) *Client
 		info:       info,
 		status:     STATUS_CLIENT_OK,
 		send:       make(chan Event),
+		once:       sync.Once{},
 	}
 }
 
@@ -107,6 +114,7 @@ func NewClientInRoom(conn *websocket.Conn, manager *Manager, info *ClientInfo, r
 		room:       room,
 		status:     STATUS_CLIENT_OK,
 		send:       make(chan Event),
+		once:       sync.Once{},
 	}
 }
 
@@ -143,11 +151,18 @@ func (c *Client) pongHandler(_ string) error {
 // Handles all messages from the client to the server
 func (c *Client) readMessages() {
 
-	// cleanup
-	defer func() {
+	var status ClientStatus = STATUS_CLIENT_NULL
 
-		c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
-	}()
+	// cleanup
+	defer func(status *ClientStatus) {
+
+		c.once.Do(func() {
+
+			c.status = *status
+
+			c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
+		})
+	}(&status)
 
 	// Configure Wait time for Pong response, use Current time + pongWait
 	// This has to be done here to set the first initial timer.
@@ -172,7 +187,7 @@ func (c *Client) readMessages() {
 
 			c.connection.Close()
 
-			c.status = STATUS_CLIENT_REMOVED_BY_SERVER
+			status = STATUS_CLIENT_REMOVED_BY_SERVER
 
 			return
 		}
@@ -185,11 +200,11 @@ func (c *Client) readMessages() {
 
 				log.Errorf("error reading message: %v", err)
 
-				c.status = STATUS_CLIENT_DISCONNECTED
+				status = STATUS_CLIENT_DISCONNECTED
 
 			} else {
 
-				c.status = STATUS_CLIENT_LEFT
+				status = STATUS_CLIENT_LEFT
 
 			}
 
@@ -221,17 +236,23 @@ func (c *Client) writeMessages() {
 
 	var err error
 	var data []byte
+	var status ClientStatus = STATUS_CLIENT_NULL
 
 	// ping timer, sends out pings on this interval
 	ticker := time.NewTicker(pingInterval)
 
 	// cleanup
-	defer func() {
+	defer func(status *ClientStatus) {
 
 		ticker.Stop()
 
-		c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
-	}()
+		c.once.Do(func() {
+
+			c.status = *status
+
+			c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
+		})
+	}(&status)
 
 	// for select channel pattern
 	for {
@@ -244,7 +265,7 @@ func (c *Client) writeMessages() {
 
 				log.Error("Cannot ping client: ", err)
 
-				c.status = STATUS_CLIENT_DISCONNECTED
+				status = STATUS_CLIENT_DISCONNECTED
 
 				return
 			}
@@ -260,7 +281,7 @@ func (c *Client) writeMessages() {
 					log.Warn("connection closed: ", err)
 				}
 
-				c.status = STATUS_CLIENT_DISCONNECTED
+				status = STATUS_CLIENT_DISCONNECTED
 
 				return
 			}
@@ -271,7 +292,7 @@ func (c *Client) writeMessages() {
 
 				log.Error(err)
 
-				c.status = STATUS_CLIENT_REMOVED_BY_SERVER
+				status = STATUS_CLIENT_REMOVED_BY_SERVER
 
 				return
 			}
