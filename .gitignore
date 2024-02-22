@@ -1,5 +1,6 @@
 # Custom stuff
 
+src/static/
 .idea/
 /tests/data_files
 *.log

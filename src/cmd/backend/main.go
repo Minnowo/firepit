@@ -75,6 +75,8 @@ func main() {
 
 	e.GET("/ws", m.ServeWebsocket)
 
+	e.Static("/static", "static")
+
 	roomGroup := e.Group("/room")
 	roomGroup.GET("/new", m.GetRoomManager().CreateRoomGET)
 
