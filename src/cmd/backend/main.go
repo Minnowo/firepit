@@ -52,7 +52,7 @@ func getDBConf() *database.DBConfig {
 		Password:     "root",
 		Hostname:     "127.0.0.1",
 		Port:         3306,
-		DatabaseName: "golang-test",
+		DatabaseName: "firepit-mariadb",
 	}
 }
 

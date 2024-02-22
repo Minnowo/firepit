@@ -19,8 +19,8 @@ debug: | bin_dir
 create_db:
 	docker run \
 		--detach \
-		--name "golang-test" \
+		--name "firepit-mariadb" \
 		--env MARIADB_ROOT_PASSWORD="root" \
-		--env MARIADB_DATABASE="golang-test" \
+		--env MARIADB_DATABASE="firepit-mariadb" \
 		-p 127.0.0.1:3306:3306 \
 		mariadb:latest
