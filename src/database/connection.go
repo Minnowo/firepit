@@ -46,6 +46,7 @@ func DBInit(conf *DBConfig) {
 	log.Info("Running automigrate")
 
 	db.AutoMigrate(&models.Quote{})
+	db.AutoMigrate(&models.Theme{})
 }
 
 func GetDB() *gorm.DB {
