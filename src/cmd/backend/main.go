@@ -79,6 +79,7 @@ func main() {
 
 	roomGroup := e.Group("/room")
 	roomGroup.GET("/new", m.GetRoomManager().CreateRoomGET)
+	roomGroup.GET("/:rid", m.GetRoomManager().HasRoomGET)
 
 	quoteGroup := e.Group("/quote")
 	quoteGroup.GET("", handler.GetRandomQuote)

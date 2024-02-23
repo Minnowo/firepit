@@ -503,7 +503,7 @@ func (r *Room) _removeClient(c *Client) {
 
 	log.Infof("Client %s is being removed from the room", c.info.DisplayId)
 
-    for i, cl := range r.Clients {
+	for i, cl := range r.Clients {
 
 		if cl != c {
 
@@ -604,4 +604,11 @@ func (m *RoomManager) CreateRoomGET(c echo.Context) error {
 	}
 
 	return c.String(http.StatusOK, rid)
+}
+
+func (m *RoomManager) HasRoomGET(c echo.Context) error {
+
+	rid := c.Param("rid")
+
+	return c.JSON(http.StatusOK, map[string]bool{"room_exists": m.HasRoom(rid)})
 }
