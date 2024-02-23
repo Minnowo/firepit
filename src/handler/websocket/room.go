@@ -503,9 +503,7 @@ func (r *Room) _removeClient(c *Client) {
 
 	log.Infof("Client %s is being removed from the room", c.info.DisplayId)
 
-	for i := uint32(0); i < r.Size; i++ {
-
-		cl := r.Clients[i]
+    for i, cl := range r.Clients {
 
 		if cl != c {
 

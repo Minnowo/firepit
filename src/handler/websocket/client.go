@@ -158,6 +158,8 @@ func (c *Client) readMessages() {
 
 		c.once.Do(func() {
 
+            log.Debug("Client once.Do removing client from read sink");
+
 			c.status = *status
 
 			c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
