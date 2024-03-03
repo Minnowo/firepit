@@ -102,13 +102,13 @@ func main() {
 	jwtMiddleware := echojwt.WithConfig(echojwt.Config{
 		SigningKey: a.AuthSecret,
 		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(handler.Claims)
+			return new(handler.JWTClaims)
 		},
 		SigningMethod: "HS512", // see auth.go for the AuthCreateJWT function
 	})
 
 	authed := e.Group("/authed", jwtMiddleware)
-	authed.GET("/auth", handler.GETEnsureAuthed)
+	authed.GET("/refresh", a.GETRefreshJWT)
 	authed.POST("/quote", handler.GETCreateNewQuote)
 
 	e.RouteNotFound("/", handler.GETHeartbeat)

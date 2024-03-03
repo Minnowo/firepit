@@ -4,6 +4,23 @@ let ws;
 let jwt=function(){};
 const HOST = "localhost:3000";
 
+function refreshJWT(){
+
+    fetch(`http://${HOST}/authed/refresh`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${jwt.token}`,
+        }
+    })
+        .then(r => r.json())
+        .then(json => {
+            console.log(json)
+            jwt.token = json.token
+        })
+        .catch(e => console.log(e));
+}
+
 function loginAccount(){
 
     let pass = document.getElementById("passwordLoginId").value;

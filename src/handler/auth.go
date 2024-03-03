@@ -17,7 +17,7 @@ type AuthHandler struct {
 	TokenTimeout time.Duration
 }
 
-type Claims struct {
+type JWTClaims struct {
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
@@ -51,7 +51,7 @@ func (a *AuthHandler) CreateJWTFromAuthPayload(authPayload *data.AuthPayload) (s
 
 	log.Infof("Creating new JWT. Expires (RFC3339):", expirationTime.Format(time.RFC3339))
 
-	claims := &Claims{
+	claims := &JWTClaims{
 
 		Username: authPayload.Username,
 
@@ -71,12 +71,12 @@ func (a *AuthHandler) POSTCreateUser(c echo.Context) error {
 
 	if err := a.BasicPayloadCheck(c, &authPayload); err != nil {
 
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
 
 	if !database.CreateUser(&authPayload) {
 
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Failed to create user"})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Failed to create user"})
 	}
 
 	log.Infof("Created new user with name %s", authPayload.Username)
@@ -87,7 +87,7 @@ func (a *AuthHandler) POSTCreateUser(c echo.Context) error {
 
 		log.Error(err)
 
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Internal server error"})
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"token": finalToken})
@@ -99,12 +99,12 @@ func (a *AuthHandler) POSTCreateJWT(c echo.Context) error {
 
 	if err := a.BasicPayloadCheck(c, &authPayload); err != nil {
 
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
 
 	if !database.IsCredentialsValid(&authPayload) {
 
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid credentials"})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid credentials"})
 	}
 
 	finalToken, err := a.CreateJWTFromAuthPayload(&authPayload)
@@ -113,13 +113,36 @@ func (a *AuthHandler) POSTCreateJWT(c echo.Context) error {
 
 		log.Error(err)
 
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Internal server error"})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"token": finalToken})
+	return c.JSON(http.StatusOK, echo.Map{"token": finalToken})
 }
 
-func GETEnsureAuthed(c echo.Context) error {
+func (a *AuthHandler) GETRefreshJWT(c echo.Context) error {
 
-	return c.String(http.StatusOK, "Hello, World!")
+	user, ok := c.Get("user").(*jwt.Token)
+
+	if !ok {
+		return echo.ErrUnauthorized
+	}
+
+	claims, ok := user.Claims.(*JWTClaims)
+
+	if !ok {
+		return echo.ErrUnauthorized
+	}
+
+	finalToken, err := a.CreateJWTFromAuthPayload(&data.AuthPayload{Username: claims.Username})
+
+	if err != nil {
+
+		log.Error(err)
+
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Internal server error"})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"token": finalToken,
+	})
 }
