@@ -9,7 +9,7 @@ import (
 	"github.com/labstack/gommon/log"
 )
 
-func CreateNewQuote(c echo.Context) error {
+func GETCreateNewQuote(c echo.Context) error {
 
 	var quote models.Quote
 
@@ -29,10 +29,10 @@ func CreateNewQuote(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "There was a server error")
 	}
 
-	return nil
+	return c.String(http.StatusOK, "Quote Created")
 }
 
-func GetRandomQuote(c echo.Context) error {
+func GETRandomQuote(c echo.Context) error {
 
 	var quote models.Quote
 

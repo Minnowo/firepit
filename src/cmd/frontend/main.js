@@ -1,8 +1,52 @@
 
 
 let ws;
+let jwt=function(){};
 const HOST = "localhost:3000";
 
+function loginAccount(){
+
+    let pass = document.getElementById("passwordLoginId").value;
+    let user = document.getElementById("usernameLoginId").value;
+
+    fetch(`http://${HOST}/auth/token`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            username: user,
+            password: pass
+        }),
+    }).then(r => r.json()).
+        then(json => {
+
+            console.log(json);
+            jwt.token = json.token;
+        });
+}
+
+function createAccount(){
+
+    let pass = document.getElementById("passwordId").value;
+    let user = document.getElementById("usernameId").value;
+
+    fetch(`http://${HOST}/auth/create`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            username: user,
+            password: pass
+        }),
+    }).then(r => r.json()).
+        then(json => {
+
+            console.log(json);
+            jwt.token = json.token;
+        });
+}
 
 function setSpeaker(speakerId) {
 
@@ -168,6 +212,23 @@ function sendMessage(){
     if(ws && ws.readyState === WebSocket.OPEN){
         ws.send("hello server!");
     }
+}
+
+function postNewQuote(){
+    quote = document.getElementById("newQuoteId").value;
+
+    console.log(quote);
+
+    fetch(`http://${HOST}/authed/quote`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${jwt.token}`,
+        },
+        body: JSON.stringify({
+            quote: quote,
+        }),
+    }).catch(e => console.log(e));
 }
 
 function setSpeakerById(id){

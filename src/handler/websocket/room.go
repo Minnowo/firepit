@@ -594,7 +594,7 @@ func (r *Room) _broadcast(e *Event) {
 
 // GET request handler for creating a new room
 // Room ids are 8byte integers now
-func (m *RoomManager) CreateRoomGET(c echo.Context) error {
+func (m *RoomManager) GETCreateRoom(c echo.Context) error {
 
 	rid, err := m.CreateRoomID()
 
@@ -606,7 +606,7 @@ func (m *RoomManager) CreateRoomGET(c echo.Context) error {
 	return c.String(http.StatusOK, rid)
 }
 
-func (m *RoomManager) HasRoomGET(c echo.Context) error {
+func (m *RoomManager) GETHasRoom(c echo.Context) error {
 
 	rid := c.Param("rid")
 

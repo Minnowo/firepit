@@ -3,10 +3,14 @@ package main
 import (
 	"os"
 	"strconv"
+	"time"
 
+	"github.com/EZCampusDevs/firepit/data"
 	"github.com/EZCampusDevs/firepit/database"
 	"github.com/EZCampusDevs/firepit/handler"
 	"github.com/EZCampusDevs/firepit/handler/websocket"
+	"github.com/golang-jwt/jwt/v5"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -61,12 +65,19 @@ func main() {
 	var e *echo.Echo
 	var m *websocket.Manager
 	var c *database.DBConfig
+	var a *handler.AuthHandler
 
 	e = echo.New()
 	m = websocket.NewManager()
 	c = getDBConf()
+	a = &handler.AuthHandler{
+		AuthSecret:   []byte(os.Getenv(data.ENV_JWT_KEY)),
+		TokenTimeout: 60 * time.Minute,
+	}
 
 	initLogging(e)
+
+	a.ValidateFatal()
 
 	database.DBInit(c)
 
@@ -78,14 +89,29 @@ func main() {
 	e.Static("/static", "static")
 
 	roomGroup := e.Group("/room")
-	roomGroup.GET("/new", m.GetRoomManager().CreateRoomGET)
-	roomGroup.GET("/:rid", m.GetRoomManager().HasRoomGET)
+	roomGroup.GET("/new", m.GetRoomManager().GETCreateRoom)
+	roomGroup.GET("/:rid", m.GetRoomManager().GETHasRoom)
 
 	quoteGroup := e.Group("/quote")
-	quoteGroup.GET("", handler.GetRandomQuote)
-	quoteGroup.POST("", handler.CreateNewQuote)
+	quoteGroup.GET("", handler.GETRandomQuote)
 
-	e.RouteNotFound("/", handler.Heartbeat)
+	auth := e.Group("/auth")
+	auth.POST("/token", a.POSTCreateJWT)
+	auth.POST("/create", a.POSTCreateUser)
+
+	jwtMiddleware := echojwt.WithConfig(echojwt.Config{
+		SigningKey: a.AuthSecret,
+		NewClaimsFunc: func(c echo.Context) jwt.Claims {
+			return new(handler.Claims)
+		},
+		SigningMethod: "HS512", // see auth.go for the AuthCreateJWT function
+	})
+
+	authed := e.Group("/authed", jwtMiddleware)
+	authed.GET("/auth", handler.GETEnsureAuthed)
+	authed.POST("/quote", handler.GETCreateNewQuote)
+
+	e.RouteNotFound("/", handler.GETHeartbeat)
 
 	e.Logger.Fatal(e.Start(":3000"))
 }

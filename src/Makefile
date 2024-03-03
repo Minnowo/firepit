@@ -13,7 +13,7 @@ run:  | bin_dir
 	@DEBUG=false LOG_LEVEL=2 go run cmd/backend/main.go
 
 debug: | bin_dir
-	@DEBUG=true go run cmd/backend/main.go
+	@DEBUG=true JWT_SECRET=thisisasupersecretsecret go run cmd/backend/main.go
 
 
 create_db:
