@@ -54,7 +54,7 @@ func getDBConf() *database.DBConfig {
 	return &database.DBConfig{
 		Username:     "root",
 		Password:     "root",
-		Hostname:     "127.0.0.1",
+		Hostname:     "firepit-mariadb",
 		Port:         3306,
 		DatabaseName: "firepit-mariadb",
 	}
