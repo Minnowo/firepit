@@ -2,6 +2,28 @@ pipeline {
     agent any  
 
     stages { 
+
+        stage('Build Env File') {
+
+            steps {
+
+                withCredentials([usernamePassword(credentialsId: 'FIREPIT_DB_CREDS', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+                    withCredentials([string(credentialsId: 'FIREPIT_JWT', variable: 'JWT_VALUE')]) {
+
+                                writeFile file: './env.sh', text: """#!/bin/sh
+JWT_SECRET="${JWT_VALUE}" 
+DB_USERNAME="${USERNAME}" 
+DB_PASSWORD="${PASSWORD}" 
+DB_HOSTNAME="firepit-mariadb" 
+DB_NAME="firepit-mariadb" 
+DB_PORT="3306" 
+"""
+
+                }
+                }
+
+            }
+        }
         
         stage('Copy and Build Code on Remote') {
 
@@ -29,16 +51,26 @@ pipeline {
 
                                         cd ~/pipeline_firepit
 
-                                        docker build -t firepit .
+                                        chmod +x env.sh
+                                        . ./env.sh
+                                        rm -rf env.sh
+
+                                        docker build -t firepit-go-img .
 
                                         docker stop firepit_prod || true
                                         docker rm firepit_prod || true
 
                                         docker run \
-                                            --name firepit_prod \
                                             -d \
+                                            -e DB_USERNAME="$DB_USERNAME" \
+                                            -e DB_PASSWORD="$DB_PASSWORD" \
+                                            -e DB_NAME=firepit-mariadb \
+                                            -e DB_HOSTNAME=firepit-mariadb \
+                                            -e JWT_SECRET="$JWT_SECRET" \
                                             -p 127.0.0.1:3003:3000 \
-                                            firepit:latest
+                                            --network firepit \
+                                            --name firepit_prod \
+                                            firepit-go-img:latest
 
                                     ''', 
                                     execTimeout: 120000, 
@@ -49,7 +81,7 @@ pipeline {
                             remoteDirectory: './pipeline_firepit', 
                             remoteDirectorySDF: false, 
                             removePrefix: '', 
-                            sourceFiles: 'Dockerfile, src/**'
+                            sourceFiles: 'env.sh, Dockerfile, src/**'
                             )
                     ], 
                     usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)
