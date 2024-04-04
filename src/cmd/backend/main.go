@@ -51,12 +51,57 @@ func initLogging(app *echo.Echo) {
 }
 
 func getDBConf() *database.DBConfig {
+
+	var username string
+	var password string
+	var hostname string
+	var databasename string = "firepit-mariadb"
+	var port int = 3306
+
+	if u, e := os.LookupEnv(data.ENV_DATABASE_USERNAME_KEY); e {
+		username = u
+	} else {
+		log.Fatalf("Must set %s to the database username", data.ENV_DATABASE_USERNAME_KEY)
+	}
+
+	if p, e := os.LookupEnv(data.ENV_DATABASE_PASSWORD_KEY); e {
+		password = p
+	} else {
+		log.Fatalf("Must set %s to the database password", data.ENV_DATABASE_PASSWORD_KEY)
+	}
+
+	if h, e := os.LookupEnv(data.ENV_DATABASE_HOSTNAME_KEY); e {
+		hostname = h
+	} else {
+		log.Fatalf("Must set %s to the database hostname", data.ENV_DATABASE_HOSTNAME_KEY)
+	}
+
+	if n, e := os.LookupEnv(data.ENV_DATABASE_NAME_KEY); e {
+		databasename = n
+	} else {
+		log.Warnf("%s was not set, using default value of %s", data.ENV_DATABASE_NAME_KEY, databasename)
+	}
+
+	if p, e := os.LookupEnv(data.ENV_DATABASE_PORT_KEY); e {
+
+		i, err := strconv.Atoi(p)
+
+		if err == nil {
+			port = i
+		} else {
+			log.Warnf("%s had an invalid integer. Using default value of %d", data.ENV_DATABASE_PORT_KEY, port)
+		}
+
+	} else {
+		log.Warnf("%s was not set, using default value of %d", data.ENV_DATABASE_PORT_KEY, port)
+	}
+
 	return &database.DBConfig{
-		Username:     "root",
-		Password:     "root",
-		Hostname:     "firepit-mariadb",
-		Port:         3306,
-		DatabaseName: "firepit-mariadb",
+		Username:     username,
+		Password:     password,
+		Hostname:     hostname,
+		Port:         port,
+		DatabaseName: databasename,
 	}
 }
 
