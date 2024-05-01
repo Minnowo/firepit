@@ -22,17 +22,30 @@ var (
 
 type ClientList []*Client
 type ClientInfoList []*ClientInfo
-type ClientSet map[*Client]uint32
+type ClientMap map[*Client]uint32
 type ClientStatus uint32
 
 const (
-	STATUS_CLIENT_OK                ClientStatus = iota
-	STATUS_CLIENT_LEFT              ClientStatus = iota
-	STATUS_CLIENT_DISCONNECTED      ClientStatus = iota
-	STATUS_CLIENT_REMOVED_BY_SERVER ClientStatus = iota
-	STATUS_CLIENT_RECONNECT         ClientStatus = iota
-	STATUS_CLIENT_NULL              ClientStatus = iota
+	STATUS_CLIENT_OK           ClientStatus = iota
+	STATUS_CLIENT_DISCONNECTED ClientStatus = iota
+	STATUS_CLIENT_RECONNECT    ClientStatus = iota
 )
+
+func (c *ClientMap) ToClientInfoSlice() ClientInfoList {
+
+	keys := make([]*ClientInfo, len(*c))
+
+	i := 0
+	for c := range *c {
+
+		keys[i] = c.info
+		i++
+	}
+
+	keys = keys[0:i]
+
+	return keys
+}
 
 // Used to convert the ClientSet into something json serializable
 func (c *ClientList) ToClientInfoSlice() ClientInfoList {
@@ -57,13 +70,14 @@ func (c *ClientList) ToClientInfoSlice() ClientInfoList {
 
 // The main client info
 type ClientInfo struct {
-	Name              string `json:"client_name" query:"name"`
-	DisplayId         string `json:"client_id" query:"id"`
-	Occupation        string `json:"client_occupation" query:"occup"`
-	Number            uint32 `json:"order"`
-	RoomId            string `json:"-" query:"rid"`
-	ReconnectionToken string `json:"-" query:"rtoken"`
-	SpeakerRank       uint32 `json:"-"`
+	Name              string    `json:"client_name" query:"name"`
+	DisplayId         string    `json:"client_id" query:"id"`
+	Occupation        string    `json:"client_occupation" query:"occup"`
+	Number            uint32    `json:"order"`
+	RoomId            string    `json:"-" query:"rid"`
+	ReconnectionToken string    `json:"-" query:"rtoken"`
+	SpeakerRank       uint32    `json:"-"`
+	DisconnectedAt    time.Time `json:"-"`
 }
 
 // Determines if the info is valid to form a websocket connection
@@ -151,28 +165,23 @@ func (c *Client) pongHandler(_ string) error {
 // Handles all messages from the client to the server
 func (c *Client) readMessages() {
 
-	var status ClientStatus = STATUS_CLIENT_NULL
-
 	// cleanup
-	defer func(status *ClientStatus) {
+	defer func() {
 
 		c.once.Do(func() {
 
-			log.Debug("Client once.Do removing client from read sink")
+			if e := c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c); e != nil {
 
-			c.status = *status
-
-			c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
+				log.Error(e)
+			}
 		})
-	}(&status)
+	}()
 
 	// Configure Wait time for Pong response, use Current time + pongWait
 	// This has to be done here to set the first initial timer.
 	if err := c.pongHandler(""); err != nil {
 
 		log.Error(err)
-
-		c.status = STATUS_CLIENT_REMOVED_BY_SERVER
 
 		return
 	}
@@ -189,8 +198,6 @@ func (c *Client) readMessages() {
 
 			c.connection.Close()
 
-			status = STATUS_CLIENT_REMOVED_BY_SERVER
-
 			return
 		}
 
@@ -201,13 +208,6 @@ func (c *Client) readMessages() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 
 				log.Errorf("error reading message: %v", err)
-
-				status = STATUS_CLIENT_DISCONNECTED
-
-			} else {
-
-				status = STATUS_CLIENT_LEFT
-
 			}
 
 			log.Debug("Exiting message sink for client ", c, " error: ", err)
@@ -238,23 +238,23 @@ func (c *Client) writeMessages() {
 
 	var err error
 	var data []byte
-	var status ClientStatus = STATUS_CLIENT_NULL
 
 	// ping timer, sends out pings on this interval
 	ticker := time.NewTicker(pingInterval)
 
 	// cleanup
-	defer func(status *ClientStatus) {
+	defer func() {
 
 		ticker.Stop()
 
 		c.once.Do(func() {
 
-			c.status = *status
+			if e := c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c); e != nil {
 
-			c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c)
+				log.Error(e)
+			}
 		})
-	}(&status)
+	}()
 
 	// for select channel pattern
 	for {
@@ -263,11 +263,11 @@ func (c *Client) writeMessages() {
 		// when we get tick events ping the client
 		case <-ticker.C:
 
+			log.Debugf("Sending ping to %s", c.info.Name)
+
 			if err := c.connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 
 				log.Error("Cannot ping client: ", err)
-
-				status = STATUS_CLIENT_DISCONNECTED
 
 				return
 			}
@@ -283,8 +283,6 @@ func (c *Client) writeMessages() {
 					log.Warn("connection closed: ", err)
 				}
 
-				status = STATUS_CLIENT_DISCONNECTED
-
 				return
 			}
 
@@ -293,8 +291,6 @@ func (c *Client) writeMessages() {
 			if err != nil {
 
 				log.Error(err)
-
-				status = STATUS_CLIENT_REMOVED_BY_SERVER
 
 				return
 			}

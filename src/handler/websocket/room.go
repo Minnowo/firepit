@@ -1,9 +1,7 @@
 package websocket
 
 import (
-	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/EZCampusDevs/firepit/data"
@@ -12,142 +10,15 @@ import (
 )
 
 //
-// RoomManager Code and Logic
-//
-
-type RoomList map[string]*Room
-
-// The main RoomManager type
-type RoomManager struct {
-	rooms             RoomList
-	roomCodeGenerator data.RoomCodeGenerator
-
-	// To ensure threadsafe handling of rooms
-	sync.RWMutex
-}
-
-// Creates a new room manager
-func NewRoomManager() *RoomManager {
-	return &RoomManager{
-		rooms:             make(map[string]*Room),
-		roomCodeGenerator: data.NewUintNRoomCodeGenerator(3, 16),
-	}
-}
-
-// Get a unique room id
-func (r *RoomManager) CreateRoomID() (string, error) {
-
-	for {
-		rid, err := r.roomCodeGenerator.GetRoomCode()
-
-		if err != nil {
-			return "", err
-		}
-
-		if r.HasRoom(rid) {
-			log.Debugf("Room with id %d already exist!", rid)
-			continue
-		}
-
-		r.AddRoom(rid)
-
-		log.Debugf("Created room with id %d", rid)
-		log.Debugf("There are now %d rooms", len(r.rooms))
-
-		return rid, nil
-	}
-}
-
-// Creates a new room with the given id
-func (r *RoomManager) AddRoom(rid string) {
-
-	room := NewRoom(rid, nil)
-
-	// important we start the room loop here
-	go room.RunRoom()
-
-	r.Lock()
-	defer r.Unlock()
-
-	r.rooms[rid] = room
-}
-
-// Checks if there is an existing room with this id
-func (r *RoomManager) HasRoom(rid string) bool {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if _, ok := r.rooms[rid]; ok {
-		return true
-	}
-	return false
-}
-
-// Gets a room by id
-func (r *RoomManager) GetRoomById(rid string) (*Room, error) {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if room, ok := r.rooms[rid]; ok {
-
-		return room, nil
-	}
-
-	return nil, fmt.Errorf("Room does not exist")
-}
-
-// Adds the given client to the room
-func (r *RoomManager) AddClientToRoom(rid string, c *Client) error {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if room, ok := r.rooms[rid]; ok {
-
-		room.registerClient <- c
-		return nil
-	}
-	return fmt.Errorf("Room does not exist")
-}
-
-// Removes the given client from the room
-func (r *RoomManager) RemoveRoomClient(rid string, c *Client) error {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if room, ok := r.rooms[rid]; ok {
-
-		room.unregisterClient <- c
-		return nil
-	}
-	return fmt.Errorf("Room does not exist")
-}
-
-// Sets the clients room object
-func (r *RoomManager) SetClientRoomPtr(rid string, c *Client) error {
-
-	r.RLock()
-	defer r.RUnlock()
-
-	if room, ok := r.rooms[rid]; ok {
-
-		c.room = room
-		return nil
-	}
-
-	return fmt.Errorf("Room does not exist")
-}
-
-//
 // Room Code and logic
 //
 
 var (
-	RoomEmptyCheckInterval = 2 * time.Minute
+	RoomEmptyCheckInterval      = 2 * time.Minute
+	RoomDisconnectClearInterval = 15 * time.Minute
 )
+
+type ReconnectionTokenMap map[string]*ClientInfo
 
 // The room type used for json
 type RoomJSON struct {
@@ -163,11 +34,12 @@ type RoomJSON struct {
 type Room struct {
 	ID                string
 	Name              string
-	Size              uint32
-	Clients           ClientList
+	Clients           ClientMap
+	Reconnects        ReconnectionTokenMap
 	Speaker           *Client
 	Capacity          uint32
 	RequireOccupation bool
+	ClientOrder       uint32
 	LastEmptyTime     time.Time
 
 	state            chan byte
@@ -180,13 +52,15 @@ type Room struct {
 
 // Create a new room
 func NewRoom(name string, speaker *Client) *Room {
-	const capacity uint32 = 30
+	const capacity uint32 = 25
 
 	return &Room{
 		Name:             name,
 		Speaker:          speaker,
 		Capacity:         capacity,
-		Clients:          make(ClientList, capacity),
+		ClientOrder:      0,
+		Clients:          make(ClientMap),
+		Reconnects:       make(ReconnectionTokenMap),
 		state:            make(chan byte),
 		setSpeakerById:   make(chan string),
 		registerClient:   make(chan *Client),
@@ -205,29 +79,51 @@ func (r *Room) RunRoom() {
 
 	for {
 		select {
+
 		case c := <-r.registerClient:
 			log.Debugf("Adding client %s", c.info.DisplayId)
 			r._addClient(c)
+			log.Info(r.Clients)
+			continue
+
 		case c := <-r.unregisterClient:
 			log.Debugf("Removing client %s", c.info.DisplayId)
 			r._removeClient(c)
+			log.Info(r.Clients)
+			continue
+
 		case c := <-r.setSpeakerById:
 			log.Debugf("Setting speaker by id %s", c)
 			r._setSpeakerById(c)
+			continue
+
 		case c := <-r.broadcastInfo:
 			log.Debugf("Broadcast room info to %s", c.info.DisplayId)
 			r._broadCastRoomInfo(c)
+			continue
+
 		case e := <-r.broadcast:
 			log.Debugf("Broadcasting %d", e.Type)
 			r._broadcast(e)
+			continue
 
 		case time := <-ticker.C:
+
+			log.Debug("RunRoom tick")
+
+			for _, i := range r.Reconnects {
+
+				if time.Sub(i.DisconnectedAt) > RoomDisconnectClearInterval {
+
+					delete(r.Reconnects, i.ReconnectionToken)
+				}
+			}
 
 			if len(r.Clients) > 0 {
 
 				r.LastEmptyTime = time
 
-				log.Debug("There are clients in the room!")
+				log.Debugf("There are %s clients in the room!", len(r.Clients))
 
 				continue
 			}
@@ -238,6 +134,7 @@ func (r *Room) RunRoom() {
 				log.Infof("Room %s has been empty for a long time! It is now dead.", r.ID)
 				return
 			}
+			continue
 
 		// lets us handle pause, resume, and kill the thread
 		case s := <-r.state:
@@ -273,19 +170,15 @@ func (r *Room) RunRoom() {
 				}
 			}
 		}
-
-		log.Debug("RunRoom tick")
 	}
 }
 
 // Called to cleanup a room that has died
 func (r *Room) _cleanupRoom() {
 
-	for _, client := range r.Clients {
+	for client := range r.Clients {
 
-		if client != nil {
-			client.Disconnect()
-		}
+		client.Disconnect()
 	}
 
 	r.Speaker = nil
@@ -348,11 +241,7 @@ func (r *Room) _broadcastSetSpeaker() {
 // Set the speaker by id
 func (r *Room) _setSpeakerById(id string) {
 
-	for _, c := range r.Clients {
-
-		if c == nil || c.status != STATUS_CLIENT_OK {
-			continue
-		}
+	for c := range r.Clients {
 
 		if c.info.DisplayId != id {
 			continue
@@ -377,7 +266,9 @@ func (r *Room) _setSpeakerById(id string) {
 // Adds the given client to the room
 func (r *Room) _addClient(c *Client) {
 
-	if r.Capacity == r.Size {
+	clientCount := uint32(len(r.Clients))
+
+	if r.Capacity == clientCount {
 
 		log.Warnf("Client %s cannot join room %d because it is full", c.info.DisplayId, r.ID)
 
@@ -388,35 +279,38 @@ func (r *Room) _addClient(c *Client) {
 
 	if c.status == STATUS_CLIENT_RECONNECT {
 
-		log.Infof("Client %s is trying to reconnect!", c.info.DisplayId)
+		log.Infof("Client %s is trying to reconnect with %s", c.info.DisplayId, c.info.ReconnectionToken)
 
-		if r._tryReconnectClient(c) {
+		info, ok := r.Reconnects[c.info.ReconnectionToken]
 
-			log.Infof("Client %s has reconnected!", c.info.DisplayId)
+		if !ok {
 
-			r._broadcastClientJoinedRoom(c)
+			log.Infof("Reconnection failed")
 
-			if r.Size == 0 {
-				r.Speaker = c
-			}
-
-			r.Size++
-
-			r._broadCastRoomInfo(c)
+			c.Disconnect()
 
 			return
 		}
 
-		log.Errorf("Client %s failed to reconnect!", c.info.DisplayId)
+		log.Infof("RECONNECTION SUCCESSFUL")
 
-		c.Disconnect()
+		c.info = info
+		c.status = STATUS_CLIENT_OK
 
-		return
+	} else {
+
+		r.ClientOrder++
+
+		c.info.Number = r.ClientOrder
 	}
 
+	// tell other people c has joined
 	r._broadcastClientJoinedRoom(c)
 
-	if r.Size == 0 {
+	// add c to the room
+	r.Clients[c] = 0
+
+	if clientCount == 0 {
 
 		r.Speaker = c
 		c.info.SpeakerRank = 1
@@ -425,73 +319,8 @@ func (r *Room) _addClient(c *Client) {
 		c.info.SpeakerRank = 0
 	}
 
-	// if all clients in the array are not null
-	// we will replace a disconnected client
-	var replaceDisconnectedIndex int = -1
-
-	// find a new spot for the client
-	for i, client := range r.Clients {
-
-		if client == nil {
-
-			c.info.Number = uint32(i)
-
-			r.Clients[i] = c
-
-			r.Size += 1
-
-			replaceDisconnectedIndex = -1
-
-			break
-		}
-
-		if replaceDisconnectedIndex == -1 && client.status != STATUS_CLIENT_OK {
-
-			replaceDisconnectedIndex = i
-		}
-	}
-
-	// will be -1 if there is no non-null client to replace
-	if replaceDisconnectedIndex != -1 {
-
-		c.info.Number = uint32(replaceDisconnectedIndex)
-
-		r.Clients[replaceDisconnectedIndex] = c
-
-		r.Size += 1
-	}
-
-	log.Debugf("Client joined room; Can reconnect with %d; Now has %d members", c.info.ReconnectionToken, r.Size)
-	log.Info(r.Clients)
-
+	// send room info to c
 	r._broadCastRoomInfo(c)
-}
-
-// try and reconnect the client
-// if a disconnected client has the same ReconnectionToken it will be replaced with the given client
-func (r *Room) _tryReconnectClient(c *Client) bool {
-
-	for i, client := range r.Clients {
-
-		if client == nil || client.status == STATUS_CLIENT_OK {
-			continue
-		}
-
-		if client.info.ReconnectionToken == c.info.ReconnectionToken {
-
-			c.status = STATUS_CLIENT_OK
-
-			c.info = client.info
-
-			client.info = nil
-
-			r.Clients[i] = c
-
-			return true
-		}
-	}
-
-	return false
 }
 
 // Remove the given client from the room
@@ -500,76 +329,43 @@ func (r *Room) _removeClient(c *Client) {
 	if c == nil {
 		return
 	}
-
 	log.Infof("Client %s is being removed from the room", c.info.DisplayId)
 
-	for i, cl := range r.Clients {
+	// delete from the room
+	delete(r.Clients, c)
 
-		if cl != c {
+	c.info.DisconnectedAt = time.Now()
 
-			continue
-		}
+	// say this client can reconnect
+	r.Reconnects[c.info.ReconnectionToken] = c.info
 
-		switch c.status {
-		case STATUS_CLIENT_LEFT:
-		case STATUS_CLIENT_REMOVED_BY_SERVER:
-			r.Clients[i] = nil
-			break
+	// tell the client they're gone
+	c.Disconnect()
 
-		case STATUS_CLIENT_DISCONNECTED:
-			break
-
-		case STATUS_CLIENT_OK:
-
-			log.Warnf("Speaker %s is leaving with ok stsatus", c.info.DisplayId)
-
-			c.status = STATUS_CLIENT_DISCONNECTED
-			break
-		}
-
-		log.Infof("Client %s has been disconnected", c.info.DisplayId)
-
-		c.Disconnect()
-
-		r._broadcastClientLeaveRoom(c)
-
-		r.Size--
-
-		log.Debugf("Client left room; Now has %d members", r.Size)
-
-		break
-	}
+	// tell everyone else they're gone
+	r._broadcastClientLeaveRoom(c)
 
 	if c == r.Speaker {
 
+		// tell everyone who the new speaker is
 		r._findNextBestSpeaker()
 	}
 }
 
 func (r *Room) _findNextBestSpeaker() {
 
-	if r.Size == 0 {
+	if len(r.Clients) == 0 {
 
 		r.Speaker = nil
+
 		return
 	}
 
-	for _, cl := range r.Clients {
+	for c := range r.Clients {
 
-		if cl == nil || cl.status != STATUS_CLIENT_OK {
-			continue
-		}
+		r.Speaker = c
 
-		if r.Speaker.status != STATUS_CLIENT_OK {
-
-			r.Speaker = cl
-			continue
-		}
-
-		if cl.info.SpeakerRank > r.Speaker.info.SpeakerRank {
-
-			r.Speaker = cl
-		}
+		break
 	}
 
 	r._broadcastSetSpeaker()
@@ -578,17 +374,11 @@ func (r *Room) _findNextBestSpeaker() {
 // Broadcast the given even to all room members
 func (r *Room) _broadcast(e *Event) {
 
-	for i := uint32(0); i < r.Size; i++ {
+	for c := range r.Clients {
 
-		client := r.Clients[i]
+		log.Debugf("Broadcasting to client %s", c.info.DisplayId)
 
-		if client == nil || client.status != STATUS_CLIENT_OK {
-			continue
-		}
-
-		log.Debugf("Broadcasting to client %s", client.info.DisplayId)
-
-		client.send <- *e
+		c.send <- *e
 	}
 }
 
