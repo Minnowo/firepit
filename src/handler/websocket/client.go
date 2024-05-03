@@ -142,11 +142,6 @@ func (c *Client) Disconnect() {
 // Sends the WhoAmI event to the client
 func (c *Client) BroadcastWhoAmI() {
 
-	if c.status != STATUS_CLIENT_OK {
-
-		return
-	}
-
 	event, err := NewWhoAmIEvent(c)
 
 	if err == nil {
