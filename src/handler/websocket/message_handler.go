@@ -29,7 +29,7 @@ func handleSetSpeaker(e_ Event, c *Client) error {
 		return err
 	}
 
-	c.room.setSpeakerById <- e.SpeakerID
+	c.room.setSpeakerById <- e.ClientInfo.DisplayId
 
 	return nil
 }

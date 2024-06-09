@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -70,6 +71,46 @@ func NewRoom(name string, speaker *Client) *Room {
 	}
 }
 
+func (r *Room) String() string {
+
+	speaker := "None"
+
+	if r.Speaker != nil {
+		speaker = fmt.Sprintf("%s (ID: %s)", r.Speaker.info.Name, r.Speaker.info.DisplayId)
+	}
+
+	clients := ""
+	for client := range r.Clients {
+		clients += fmt.Sprintf("\n    - %s (ID: %s)", client.info.Name, client.info.DisplayId)
+	}
+
+	reconnects := ""
+
+	for token, client := range r.Reconnects {
+		reconnects += fmt.Sprintf("\n    - Token: %s, ClientID: %s", token, client.DisplayId)
+	}
+
+	return fmt.Sprintf(`Room:
+  ID: %s
+  Name: %s
+  Clients: %s
+  Reconnects: %s
+  Speaker: %s
+  Capacity: %d
+  RequireOccupation: %t
+  ClientOrder: %d
+  LastEmptyTime: %s`,
+		r.ID,
+		r.Name,
+		clients,
+		reconnects,
+		speaker,
+		r.Capacity,
+		r.RequireOccupation,
+		r.ClientOrder,
+		r.LastEmptyTime.Format(time.RFC1123))
+}
+
 // Handle channel communication for the room
 func (r *Room) RunRoom() {
 
@@ -110,6 +151,11 @@ func (r *Room) RunRoom() {
 		case time := <-ticker.C:
 
 			log.Debug("RunRoom tick")
+
+			for client := range r.Clients {
+
+				log.Infof("Client: %s", client.info.DisplayId)
+			}
 
 			for _, i := range r.Reconnects {
 
@@ -229,7 +275,7 @@ func (r *Room) _broadcastSetSpeaker() {
 		return
 	}
 
-	event, err := NewSetSpeakerEvent(r.Speaker)
+	event, err := NewCommonClientEvent(EVENT__CLIENT_SET_SPEAKER, r.Speaker)
 
 	if err == nil {
 		r._broadcast(event)
@@ -305,6 +351,9 @@ func (r *Room) _addClient(c *Client) {
 
 		c.info.Number = r.ClientOrder
 	}
+
+	// inform the client who they are
+	c.BroadcastWhoAmI()
 
 	// tell other people c has joined
 	r._broadcastClientJoinedRoom(c)

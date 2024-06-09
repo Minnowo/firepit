@@ -52,7 +52,7 @@ type OkMessageEvent struct {
 }
 
 type SetSpeakerEvent struct {
-	SpeakerID string `json:"speaker_id"`
+	ClientInfo *ClientInfo `json:"client"`
 }
 
 type JoinRoomEvent struct {
@@ -70,26 +70,6 @@ type WhoAmIEvent struct {
 
 type RoomInfoEvent struct {
 	Room *RoomJSON `json:"room"`
-}
-
-// Creates a new set speaker event
-func NewSetSpeakerEvent(c *Client) (*Event, error) {
-
-	var event SetSpeakerEvent
-
-	event.SpeakerID = c.info.DisplayId
-
-	jsonData, err := json.Marshal(&event)
-
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	return &Event{
-		Type:    EVENT__CLIENT_SET_SPEAKER,
-		Payload: jsonData,
-	}, nil
 }
 
 // Creates a new room info event

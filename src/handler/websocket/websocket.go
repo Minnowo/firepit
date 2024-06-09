@@ -59,6 +59,30 @@ func (m *Manager) routeEvent(event Event, c *Client) error {
 	return handler(event, c)
 }
 
+func (m *Manager) PrintDebugStuff(c echo.Context) error {
+
+	var info ClientInfo
+
+	if err := c.Bind(&info); err != nil {
+		log.Debug("Client tried to connect with bad Info")
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request")
+	}
+
+	if !m.roomManager.HasRoom(info.RoomId) {
+		log.Warn("Client tried to join room which did not exist")
+		return echo.NewHTTPError(http.StatusBadRequest, "No room exists")
+	}
+
+	room, err := m.roomManager.GetRoomById(info.RoomId)
+
+	if err != nil {
+		log.Error(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
+	}
+
+	return c.String(200, room.String())
+}
+
 // Function for creating new websocket connections
 // Will only accept connections with a valid name, and an existing room id
 func (m *Manager) ServeWebsocket(c echo.Context) error {
@@ -117,10 +141,6 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	log.Debug("Adding new client", client.info.DisplayId)
 	log.Debug("                 ", info)
 
-	// inform the client who they are
-	client.BroadcastWhoAmI()
-
-	log.Debug("Sending item to channel: %v", client.room.registerClient)
 	// add the client to their room
 	client.room.registerClient <- client
 

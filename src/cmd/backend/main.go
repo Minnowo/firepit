@@ -18,7 +18,6 @@ import (
 
 func initLogging(app *echo.Echo) {
 
-	IS_DEBUG := os.Getenv("DEBUG")
 	LOG_LEVEL := os.Getenv("LOG_LEVEL")
 
 	log.SetHeader("${time_rfc3339} ${level}")
@@ -33,15 +32,15 @@ func initLogging(app *echo.Echo) {
 		log.Warn("Could not read LOG_LEVEL from env. Log level is: ", app.Logger.Level())
 	}
 
-	if debug_, err := strconv.ParseBool(IS_DEBUG); err == nil {
+	if data.IS_DEBUG {
 
-		app.Debug = debug_
+		app.Debug = data.IS_DEBUG
 
-		if debug_ {
+		if data.IS_DEBUG {
 			app.Logger.SetLevel(log.DEBUG)
 		}
 
-		log.Info("Read DEBUG from Env: ", debug_)
+		log.Info("Read DEBUG from Env: ", data.IS_DEBUG)
 	} else {
 		app.Debug = false
 		log.Warn("Could not read DEBUG from env. Running in release mode.")
@@ -130,6 +129,10 @@ func main() {
 	e.Use(middleware.CORS())
 
 	e.GET("/ws", m.ServeWebsocket)
+
+	if data.IS_DEBUG {
+		e.GET("/helpme", m.PrintDebugStuff)
+	}
 
 	e.Static("/static", "static")
 
