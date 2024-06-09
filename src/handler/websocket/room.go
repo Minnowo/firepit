@@ -292,6 +292,8 @@ func (r *Room) _addClient(c *Client) {
 			return
 		}
 
+		delete(r.Reconnects, c.info.ReconnectionToken)
+
 		log.Infof("RECONNECTION SUCCESSFUL")
 
 		c.info = info
@@ -309,6 +311,8 @@ func (r *Room) _addClient(c *Client) {
 
 	// add c to the room
 	r.Clients[c] = 0
+
+	log.Infof("Adding client, current count is %d", clientCount)
 
 	if clientCount == 0 {
 

@@ -120,6 +120,7 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	// inform the client who they are
 	client.BroadcastWhoAmI()
 
+	log.Debug("Sending item to channel: %v", client.room.registerClient)
 	// add the client to their room
 	client.room.registerClient <- client
 
