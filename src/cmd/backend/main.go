@@ -126,12 +126,17 @@ func main() {
 	database.DBInit(c)
 
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
 
 	e.GET("/ws", m.ServeWebsocket)
 
 	if data.IS_DEBUG {
 		e.GET("/helpme", m.PrintDebugStuff)
+	} else {
+		e.Use(middleware.HTTPSRedirect())
+		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+			AllowOrigins: []string{"https://astoryofand.com",
+				"https://*.astoryofand.com"},
+		}))
 	}
 
 	e.Static("/static", "static")
