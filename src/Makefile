@@ -6,7 +6,7 @@ all: debug
 bin_dir:
 	mkdir -p bin
 
-build: cmd/main.go | bin_dir
+build: cmd/backend/main.go | bin_dir
 	go build -o bin/main cmd/backend/main.go
 
 run:  | bin_dir

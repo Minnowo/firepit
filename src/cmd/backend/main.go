@@ -3,14 +3,14 @@ package main
 import (
 	"os"
 	"strconv"
-	"time"
+	// "time"
 
 	"github.com/EZCampusDevs/firepit/data"
-	"github.com/EZCampusDevs/firepit/database"
+	// "github.com/EZCampusDevs/firepit/database"
 	"github.com/EZCampusDevs/firepit/handler"
 	"github.com/EZCampusDevs/firepit/handler/websocket"
-	"github.com/golang-jwt/jwt/v5"
-	echojwt "github.com/labstack/echo-jwt/v4"
+	// "github.com/golang-jwt/jwt/v5"
+	// echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -49,6 +49,7 @@ func initLogging(app *echo.Echo) {
 	log.SetLevel(app.Logger.Level())
 }
 
+/*
 func getDBConf() *database.DBConfig {
 
 	var username string
@@ -103,27 +104,28 @@ func getDBConf() *database.DBConfig {
 		DatabaseName: databasename,
 	}
 }
+*/
 
 func main() {
 
 	var e *echo.Echo
 	var m *websocket.Manager
-	var c *database.DBConfig
-	var a *handler.AuthHandler
+	// var c *database.DBConfig
+	// var a *handler.AuthHandler
 
 	e = echo.New()
 	m = websocket.NewManager()
-	c = getDBConf()
-	a = &handler.AuthHandler{
-		AuthSecret:   []byte(os.Getenv(data.ENV_JWT_KEY)),
-		TokenTimeout: 60 * time.Minute,
-	}
+	// c = getDBConf()
+	// a = &handler.AuthHandler{
+	// 	AuthSecret:   []byte(os.Getenv(data.ENV_JWT_KEY)),
+	// 	TokenTimeout: 60 * time.Minute,
+	// }
 
 	initLogging(e)
 
-	a.ValidateFatal()
+	// a.ValidateFatal()
 
-	database.DBInit(c)
+	// database.DBInit(c)
 
 	e.Use(middleware.Recover())
 
@@ -145,24 +147,24 @@ func main() {
 	roomGroup.GET("/new", m.GetRoomManager().GETCreateRoom)
 	roomGroup.GET("/:rid", m.GetRoomManager().GETHasRoom)
 
-	quoteGroup := e.Group("/quote")
-	quoteGroup.GET("", handler.GETRandomQuote)
+	// quoteGroup := e.Group("/quote")
+	// quoteGroup.GET("", handler.GETRandomQuote)
 
-	auth := e.Group("/auth")
-	auth.POST("/token", a.POSTCreateJWT)
-	auth.POST("/create", a.POSTCreateUser)
+	// auth := e.Group("/auth")
+	// auth.POST("/token", a.POSTCreateJWT)
+	// auth.POST("/create", a.POSTCreateUser)
 
-	jwtMiddleware := echojwt.WithConfig(echojwt.Config{
-		SigningKey: a.AuthSecret,
-		NewClaimsFunc: func(c echo.Context) jwt.Claims {
-			return new(handler.JWTClaims)
-		},
-		SigningMethod: "HS512", // see auth.go for the AuthCreateJWT function
-	})
+	// jwtMiddleware := echojwt.WithConfig(echojwt.Config{
+	// 	SigningKey: a.AuthSecret,
+	// 	NewClaimsFunc: func(c echo.Context) jwt.Claims {
+	// 		return new(handler.JWTClaims)
+	// 	},
+	// 	SigningMethod: "HS512", // see auth.go for the AuthCreateJWT function
+	// })
 
-	authed := e.Group("/authed", jwtMiddleware)
-	authed.GET("/refresh", a.GETRefreshJWT)
-	authed.POST("/quote", handler.GETCreateNewQuote)
+	// authed := e.Group("/authed", jwtMiddleware)
+	// authed.GET("/refresh", a.GETRefreshJWT)
+	// authed.POST("/quote", handler.GETCreateNewQuote)
 
 	e.RouteNotFound("/", handler.GETHeartbeat)
 
