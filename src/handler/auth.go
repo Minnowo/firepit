@@ -1,5 +1,6 @@
 package handler
 
+/*
 import (
 	"fmt"
 	"net/http"
@@ -146,3 +147,4 @@ func (a *AuthHandler) GETRefreshJWT(c echo.Context) error {
 		"token": finalToken,
 	})
 }
+*/

@@ -1,5 +1,6 @@
 package handler
 
+/*
 import (
 	"net/http"
 
@@ -45,3 +46,4 @@ func GETRandomQuote(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, quote)
 }
+*/

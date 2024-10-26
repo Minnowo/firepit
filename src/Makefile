@@ -3,24 +3,34 @@
 
 all: debug
 
-bin_dir:
-	mkdir -p bin
+install-go:
+	go mod download
 
-build: cmd/main.go | bin_dir
-	go build -o bin/main cmd/backend/main.go
+install-js:
+	(cd ui && pnpm install)
 
-run:  | bin_dir
-	@DEBUG=false LOG_LEVEL=2 go run cmd/backend/main.go
+install: install-js install-go
 
-debug: | bin_dir
-	@DEBUG=true \
-		JWT_SECRET=thisisasupersecretsecret \
-		DB_HOSTNAME=localhost \
-		DB_USERNAME=root \
-		DB_PASSWORD=root\
-		DB_PORT=3306\
-		go run cmd/backend/main.go
+format-go:
+	goimports -w $(shell find . -type f -name '*.go' -not -path "./graph/*")
+	gofmt -w $(shell find . -type f -name '*.go' -not -path "./graph/*")
 
+format-js:
+	(cd ui && pnpm format)
+
+format: format-js format-go
+
+test-go:
+	go test --race -coverprofile=coverage.txt -covermode=atomic ./...
+
+
+build-js:
+	(cd ui && pnpm build)
+
+build-go:
+	go build ./cmd/backend/main.go
+
+build: build-js build-go
 
 create_db:
 	docker run \
