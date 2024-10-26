@@ -7,12 +7,12 @@ import (
 
 	"github.com/EZCampusDevs/firepit/util"
 	"github.com/gorilla/websocket"
-	"github.com/labstack/gommon/log"
+	"github.com/rs/zerolog/log"
 )
 
 var (
 	// pongWait is how long we will await a pong response from client
-	pongWait = 10 * time.Second
+	pongWait = 20 * time.Second
 
 	// pingInterval has to be less than pongWait, We cant multiply by 0.9 to get 90% of time
 	// Because that can make decimals, so instead *9 / 10 to get 90%
@@ -147,7 +147,7 @@ func (c *Client) BroadcastWhoAmI() {
 	if err == nil {
 		c.send <- *event
 	} else {
-		log.Error(err)
+		log.Error().Err(err)
 	}
 }
 
@@ -167,7 +167,7 @@ func (c *Client) readMessages() {
 
 			if e := c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c); e != nil {
 
-				log.Error(e)
+				log.Error().Err(e)
 			}
 		})
 	}()
@@ -176,7 +176,7 @@ func (c *Client) readMessages() {
 	// This has to be done here to set the first initial timer.
 	if err := c.pongHandler(""); err != nil {
 
-		log.Error(err)
+		log.Error().Err(err)
 
 		return
 	}
@@ -189,7 +189,7 @@ func (c *Client) readMessages() {
 
 		if c.room == nil {
 
-			log.Errorf("Client %s does not have a room. Aborting connection", c.info.DisplayId)
+			log.Warn().Str("client", c.info.DisplayId).Msg("Client does not have a room. Aborting connection")
 
 			c.connection.Close()
 
@@ -202,10 +202,10 @@ func (c *Client) readMessages() {
 			// We only want to log Strange errors, but not simple Disconnection
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 
-				log.Errorf("error reading message: %v", err)
+				log.Warn().Str("client", c.info.DisplayId).Msg("Error reading message")
 			}
 
-			log.Debug("Exiting message sink for client ", c, " error: ", err)
+			log.Warn().Err(err).Str("client", c.info.DisplayId).Msg("Exiting message sink for client")
 
 			return
 		}
@@ -214,7 +214,7 @@ func (c *Client) readMessages() {
 
 		if err := json.Unmarshal(payload, &request); err != nil {
 
-			log.Errorf("error marshalling message: %v", err)
+			log.Warn().Err(err).Str("client", c.info.DisplayId).Msg("Failed to Unmarshal message")
 
 			continue
 		}
@@ -222,7 +222,7 @@ func (c *Client) readMessages() {
 		// Route the Event and handle the client's message
 		if err := c.manager.routeEvent(request, c); err != nil {
 
-			log.Error("Error handeling Message: ", err)
+			log.Warn().Err(err).Str("client", c.info.DisplayId).Msg("Failed to handle client message")
 		}
 	}
 }
@@ -246,7 +246,7 @@ func (c *Client) writeMessages() {
 
 			if e := c.manager.roomManager.RemoveRoomClient(c.info.RoomId, c); e != nil {
 
-				log.Error(e)
+				log.Error().Err(e)
 			}
 		})
 	}()
@@ -258,11 +258,11 @@ func (c *Client) writeMessages() {
 		// when we get tick events ping the client
 		case <-ticker.C:
 
-			log.Debugf("Sending ping to %s", c.info.Name)
+			log.Debug().Str("client", c.info.DisplayId).Msg("Pinging client")
 
 			if err := c.connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 
-				log.Error("Cannot ping client: ", err)
+				log.Warn().Err(err).Str("client", c.info.DisplayId).Msg("Cannot ping client")
 
 				return
 			}
@@ -275,7 +275,8 @@ func (c *Client) writeMessages() {
 
 				// Manager has closed this connection channel, so communicate that to frontend
 				if err = c.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Warn("connection closed: ", err)
+
+					log.Warn().Err(err).Str("client", c.info.DisplayId).Msg("Connection closed")
 				}
 
 				return
@@ -285,17 +286,17 @@ func (c *Client) writeMessages() {
 
 			if err != nil {
 
-				log.Error(err)
+				log.Error().Err(err).Msg("Failed to marshal JSON")
 
 				return
 			}
 
 			if err = c.connection.WriteMessage(websocket.TextMessage, data); err != nil {
 
-				log.Error(err)
+				log.Warn().Err(err)
 			}
 
-			log.Debug("sent message: ", message.Type)
+			log.Debug().Str("client", c.info.DisplayId).Int("type", message.Type).Msg("Sent message to client")
 		}
 
 	}

@@ -3,7 +3,7 @@ package websocket
 import (
 	"encoding/json"
 
-	"github.com/labstack/gommon/log"
+	"github.com/rs/zerolog/log"
 )
 
 // Event is the Messages sent over the websocket
@@ -92,7 +92,9 @@ func NewRoomInfoEvent(room *Room) (*Event, error) {
 	jsonData, err := json.Marshal(&event)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err)
+
 		return nil, err
 	}
 
@@ -112,7 +114,9 @@ func NewCommonClientEvent(type_ int, c *Client) (*Event, error) {
 	jsonData, err := json.Marshal(&event)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err)
+
 		return nil, err
 	}
 
@@ -143,7 +147,9 @@ func NewWhoAmIEvent(c *Client) (*Event, error) {
 	jsonData, err := json.Marshal(&event)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err)
+
 		return nil, err
 	}
 

@@ -4,11 +4,12 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/EZCampusDevs/firepit/util"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 )
 
 var (
@@ -64,19 +65,25 @@ func (m *Manager) PrintDebugStuff(c echo.Context) error {
 	var info ClientInfo
 
 	if err := c.Bind(&info); err != nil {
-		log.Debug("Client tried to connect with bad Info")
+
+		log.Debug().Msg("Client tried to connect with bad Info")
+
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request")
 	}
 
 	if !m.roomManager.HasRoom(info.RoomId) {
-		log.Warn("Client tried to join room which did not exist")
+
+		log.Debug().Msg("Client tried to join room which did not exist")
+
 		return echo.NewHTTPError(http.StatusBadRequest, "No room exists")
 	}
 
 	room, err := m.roomManager.GetRoomById(info.RoomId)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err).Str("id", info.RoomId).Msg("Could not get room by id")
+
 		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
 	}
 
@@ -90,17 +97,23 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	var info ClientInfo
 
 	if err := c.Bind(&info); err != nil {
-		log.Debug("Client tried to connect with bad Info")
+
+		log.Debug().Msg("Client tried to connect with bad Info")
+
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request")
 	}
 
 	if !info.IsValid() {
-		log.Debug("Client tried to connect with bad Info")
+
+		log.Debug().Msg("Client tried to connect with bad Info")
+
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request")
 	}
 
 	if !m.roomManager.HasRoom(info.RoomId) {
-		log.Warn("Client tried to join room which did not exist")
+
+		log.Debug().Msg("Client tried to join room which did not exist")
+
 		return echo.NewHTTPError(http.StatusBadRequest, "No room exists")
 	}
 
@@ -108,14 +121,18 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err).Msg("Could not upgrade to websocket request")
+
 		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
 	}
 
 	room, err := m.roomManager.GetRoomById(info.RoomId)
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err).Str("id", info.RoomId).Msg("Could not get room by id")
+
 		return echo.NewHTTPError(http.StatusInternalServerError, "Server error!")
 	}
 
@@ -138,8 +155,7 @@ func (m *Manager) ServeWebsocket(c echo.Context) error {
 	go client.readMessages()
 	go client.writeMessages()
 
-	log.Debug("Adding new client", client.info.DisplayId)
-	log.Debug("                 ", info)
+	log.Debug().Str("id", client.info.DisplayId).Msg("Adding new client")
 
 	// add the client to their room
 	client.room.registerClient <- client

@@ -7,7 +7,7 @@ import (
 
 	"github.com/EZCampusDevs/firepit/data"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
+	"github.com/rs/zerolog/log"
 )
 
 //
@@ -56,6 +56,7 @@ func NewRoom(name string, speaker *Client) *Room {
 	const capacity uint32 = 25
 
 	return &Room{
+		ID:               name,
 		Name:             name,
 		Speaker:          speaker,
 		Capacity:         capacity,
@@ -122,44 +123,54 @@ func (r *Room) RunRoom() {
 		select {
 
 		case c := <-r.registerClient:
-			log.Debugf("Adding client %s", c.info.DisplayId)
+
+			log.Info().Str("client", c.info.DisplayId).Str("room", r.ID).Msg("Adding client")
+
 			r._addClient(c)
-			log.Info(r.Clients)
+
 			continue
 
 		case c := <-r.unregisterClient:
-			log.Debugf("Removing client %s", c.info.DisplayId)
+
+			log.Info().Str("client", c.info.DisplayId).Str("room", r.ID).Msg("Removing client")
+
 			r._removeClient(c)
-			log.Info(r.Clients)
+
 			continue
 
 		case c := <-r.setSpeakerById:
-			log.Debugf("Setting speaker by id %s", c)
+
+			log.Info().Str("id", c).Str("room", r.ID).Msg("Setting speaker")
+
 			r._setSpeakerById(c)
+
 			continue
 
 		case c := <-r.broadcastInfo:
-			log.Debugf("Broadcast room info to %s", c.info.DisplayId)
+
+			log.Info().Str("id", c.info.DisplayId).Str("room", r.ID).Msg("Broadcast room info to client")
+
 			r._broadCastRoomInfo(c)
+
 			continue
 
 		case e := <-r.broadcast:
-			log.Debugf("Broadcasting %d", e.Type)
+
+			log.Info().Int("type", e.Type).Str("room", r.ID).Msg("Broadcasting message")
+
 			r._broadcast(e)
+
 			continue
 
 		case time := <-ticker.C:
 
-			log.Debug("RunRoom tick")
-
-			for client := range r.Clients {
-
-				log.Infof("Client: %s", client.info.DisplayId)
-			}
+			log.Debug().Msg("RunRoom tick")
 
 			for _, i := range r.Reconnects {
 
 				if time.Sub(i.DisconnectedAt) > RoomDisconnectClearInterval {
+
+					log.Info().Str("client", i.DisplayId).Msg("Removing client from the reconnects list")
 
 					delete(r.Reconnects, i.ReconnectionToken)
 				}
@@ -169,23 +180,26 @@ func (r *Room) RunRoom() {
 
 				r.LastEmptyTime = time
 
-				log.Debugf("There are %s clients in the room!", len(r.Clients))
+				log.Info().Str("room", r.ID).Int("clientCount", len(r.Clients)).Msg("Room still has clients")
 
 				continue
 			}
 
-			log.Debug("There are no clients in the room!")
+			log.Info().Str("room", r.ID).Msg("Room is empty")
 
 			if time.Sub(r.LastEmptyTime) > RoomEmptyCheckInterval*2 {
-				log.Infof("Room %s has been empty for a long time! It is now dead.", r.ID)
+
+				log.Info().Str("room", r.ID).Msg("Room has been empty for a long time, killing it")
+
 				return
 			}
+
 			continue
 
 		// lets us handle pause, resume, and kill the thread
 		case s := <-r.state:
 
-			log.Debugf("Room state is %s", data.ChannelStateToString(s))
+			log.Info().Str("room", r.ID).Str("state", data.ChannelStateToString(s)).Msg("Room state has been changed")
 
 			switch s {
 			default:
@@ -203,7 +217,7 @@ func (r *Room) RunRoom() {
 
 				s = <-r.state
 
-				log.Debugf("Room state is %s", data.ChannelStateToString(s))
+				log.Info().Str("room", r.ID).Str("state", data.ChannelStateToString(s)).Msg("Room state has been changed")
 
 				switch s {
 				case data.CHAN__RUNNING:
@@ -238,7 +252,7 @@ func (r *Room) _broadCastRoomInfo(c *Client) {
 	if err == nil {
 		c.send <- *event
 	} else {
-		log.Error(err)
+		log.Error().Err(err)
 	}
 
 }
@@ -251,7 +265,7 @@ func (r *Room) _broadcastClientJoinedRoom(c *Client) {
 	if err == nil {
 		r._broadcast(event)
 	} else {
-		log.Error(err)
+		log.Error().Err(err)
 	}
 }
 
@@ -263,7 +277,7 @@ func (r *Room) _broadcastClientLeaveRoom(c *Client) {
 	if err == nil {
 		r._broadcast(event)
 	} else {
-		log.Error(err)
+		log.Error().Err(err)
 	}
 }
 
@@ -271,7 +285,9 @@ func (r *Room) _broadcastClientLeaveRoom(c *Client) {
 func (r *Room) _broadcastSetSpeaker() {
 
 	if r.Speaker == nil {
-		log.Warn("Cannot set speaker because speaker is nil")
+
+		log.Warn().Str("room", r.ID).Msg("Cannot set speaker because speaker is nil")
+
 		return
 	}
 
@@ -280,7 +296,7 @@ func (r *Room) _broadcastSetSpeaker() {
 	if err == nil {
 		r._broadcast(event)
 	} else {
-		log.Error(err)
+		log.Error().Err(err)
 	}
 }
 
@@ -299,7 +315,7 @@ func (r *Room) _setSpeakerById(id string) {
 			c.info.SpeakerRank = 1
 		}
 
-		log.Debugf("Found new speaker %s", c.info.DisplayId)
+		log.Info().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Found new speaker for room")
 
 		r.Speaker = c
 
@@ -316,7 +332,7 @@ func (r *Room) _addClient(c *Client) {
 
 	if r.Capacity == clientCount {
 
-		log.Warnf("Client %s cannot join room %d because it is full", c.info.DisplayId, r.ID)
+		log.Warn().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client cannot join room because it is full")
 
 		c.connection.Close()
 
@@ -325,13 +341,13 @@ func (r *Room) _addClient(c *Client) {
 
 	if c.status == STATUS_CLIENT_RECONNECT {
 
-		log.Infof("Client %s is trying to reconnect with %s", c.info.DisplayId, c.info.ReconnectionToken)
+		log.Info().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client is trying to reconnect")
 
 		info, ok := r.Reconnects[c.info.ReconnectionToken]
 
 		if !ok {
 
-			log.Infof("Reconnection failed")
+			log.Warn().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client failed to reconnect")
 
 			c.Disconnect()
 
@@ -340,7 +356,7 @@ func (r *Room) _addClient(c *Client) {
 
 		delete(r.Reconnects, c.info.ReconnectionToken)
 
-		log.Infof("RECONNECTION SUCCESSFUL")
+		log.Info().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client has reconnected")
 
 		c.info = info
 		c.status = STATUS_CLIENT_OK
@@ -361,7 +377,7 @@ func (r *Room) _addClient(c *Client) {
 	// add c to the room
 	r.Clients[c] = 0
 
-	log.Infof("Adding client, current count is %d", clientCount)
+	log.Info().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client has joined the room")
 
 	if clientCount == 0 {
 
@@ -382,7 +398,8 @@ func (r *Room) _removeClient(c *Client) {
 	if c == nil {
 		return
 	}
-	log.Infof("Client %s is being removed from the room", c.info.DisplayId)
+
+	log.Info().Str("room", r.ID).Str("client", c.info.DisplayId).Msg("Client is being removed from the room")
 
 	// delete from the room
 	delete(r.Clients, c)
@@ -429,7 +446,7 @@ func (r *Room) _broadcast(e *Event) {
 
 	for c := range r.Clients {
 
-		log.Debugf("Broadcasting to client %s", c.info.DisplayId)
+		log.Debug().Str("room", r.ID).Str("client", c.info.DisplayId).Int("type", e.Type).Msg("Broadcasting message")
 
 		c.send <- *e
 	}
@@ -442,7 +459,9 @@ func (m *RoomManager) GETCreateRoom(c echo.Context) error {
 	rid, err := m.CreateRoomID()
 
 	if err != nil {
-		log.Error(err)
+
+		log.Error().Err(err).Msg("Could not create room")
+
 		return c.String(http.StatusInternalServerError, "Server error")
 	}
 

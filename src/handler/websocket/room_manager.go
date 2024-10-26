@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/EZCampusDevs/firepit/data"
-	"github.com/labstack/gommon/log"
+	"github.com/rs/zerolog/log"
 )
 
 //
@@ -42,14 +42,12 @@ func (r *RoomManager) CreateRoomID() (string, error) {
 		}
 
 		if r.HasRoom(rid) {
-			log.Debugf("Room with id %d already exist!", rid)
 			continue
 		}
 
 		r.AddRoom(rid)
 
-		log.Debugf("Created room with id %d", rid)
-		log.Debugf("There are now %d rooms", len(r.rooms))
+		log.Debug().Str("room", rid).Int("roomCount", len(r.rooms)).Msg("Created room")
 
 		return rid, nil
 	}

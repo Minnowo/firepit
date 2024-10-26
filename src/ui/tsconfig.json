@@ -1,0 +1,69 @@
+// {
+//     "compilerOptions": {
+//         "target": "ES2020",
+//         "useDefineForClassFields": true,
+//         "lib": ["ES2020", "DOM", "DOM.Iterable"],
+//         "module": "ESNext",
+//         "skipLibCheck": true,
+
+//         /* Bundler mode */
+//         "moduleResolution": "bundler",
+//         "allowImportingTsExtensions": true,
+//         "resolveJsonModule": true,
+//         "isolatedModules": true,
+//         "noEmit": true,
+//         "jsx": "react-jsx",
+
+//         /* Linting */
+//         "strict": true,
+//         "noUnusedLocals": true,
+//         "noUnusedParameters": true,
+//         "noFallthroughCasesInSwitch": true,
+
+//         /* Paths */
+//         "baseUrl": ".",
+//         "paths": {
+//             "@/*": ["src/*"]
+//         }
+//     },
+//     "include": ["src"],
+//     "references": [{ "path": "./tsconfig.node.json" }]
+// }
+
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "suppressImplicitAnyIndexErrors": false,
+    "strictPropertyInitialization": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "strictFunctionTypes": true,
+    "jsx": "preserve"
+  },
+  "include": [
+    "src"
+  ]
+}
