@@ -1,5 +1,7 @@
 # Custom stuff
 
+*.tar
+deploy.sh
 coverage.txt
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,react
